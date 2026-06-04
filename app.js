@@ -10,6 +10,8 @@ applyStoredTheme();
 let state = loadState();
 let toastTimer = null;
 
+installZoomLock();
+
 const money = new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: CURRENCY,
@@ -26,6 +28,33 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAll();
   registerServiceWorker();
 });
+
+function installZoomLock() {
+  const preventDefault = (event) => event.preventDefault();
+
+  window.addEventListener("wheel", (event) => {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  window.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (["+", "=", "-", "_", "0"].includes(event.key)) {
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener("touchmove", (event) => {
+    if (event.touches.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  window.addEventListener("gesturestart", preventDefault, { passive: false });
+  window.addEventListener("gesturechange", preventDefault, { passive: false });
+  window.addEventListener("gestureend", preventDefault, { passive: false });
+}
 
 function cacheElements() {
   [

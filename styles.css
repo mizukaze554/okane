@@ -66,6 +66,9 @@
 
 html {
   color-scheme: light dark;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -74,12 +77,19 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
 }
 
 button,
 input,
 select {
   font: inherit;
+}
+
+input,
+select {
+  font-size: max(16px, 1rem);
 }
 
 button {
