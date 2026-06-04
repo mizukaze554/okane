@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="Minimal offline-first personal finance control app.">
+    <title>Minimal Finance Control</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">M</div>
+          <div>
+            <strong>Minimal Finance</strong>
+            <span>Control</span>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-link active" data-view="dashboard" type="button">Dashboard</button>
+          <button class="nav-link" data-view="add" type="button">Add</button>
+          <button class="nav-link" data-view="transactions" type="button">Transactions</button>
+          <button class="nav-link" data-view="categories" type="button">Categories</button>
+          <button class="nav-link" data-view="access" type="button">Access</button>
+          <button class="nav-link" data-view="backup" type="button">Backup</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Offline personal finance</p>
+            <h1 id="viewTitle">Dashboard</h1>
+          </div>
+          <div class="offline-badge" id="networkStatus">Online</div>
+        </header>
+
+        <section id="dashboard" class="view active" aria-labelledby="dashboardTitle">
+          <div class="section-heading">
+            <h2 id="dashboardTitle">Overview</h2>
+            <p>Your balances update instantly from local data.</p>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-card hero-card">
+              <span>Total balance</span>
+              <strong id="totalBalance">¥0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Total income</span>
+              <strong id="totalIncome">¥0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Total outcome</span>
+              <strong id="totalOutcome">¥0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Transactions</span>
+              <strong id="transactionCount">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>This month income</span>
+              <strong id="monthIncome">¥0</strong>
+            </article>
+            <article class="metric-card">
+              <span>This month outcome</span>
+              <strong id="monthOutcome">¥0</strong>
+            </article>
+          </div>
+
+          <div class="split-grid">
+            <section class="panel" aria-labelledby="accessSummaryTitle">
+              <h3 id="accessSummaryTitle">Access balances</h3>
+              <div id="dashboardAccessSummary" class="stack-list"></div>
+            </section>
+            <section class="panel" aria-labelledby="monthlySummaryTitle">
+              <h3 id="monthlySummaryTitle">Monthly summary</h3>
+              <div class="bar-card">
+                <div class="bar-row">
+                  <span>Income</span>
+                  <div class="bar-track"><div id="incomeBar" class="bar-fill income"></div></div>
+                  <strong id="incomeBarValue">¥0</strong>
+                </div>
+                <div class="bar-row">
+                  <span>Outcome</span>
+                  <div class="bar-track"><div id="outcomeBar" class="bar-fill outcome"></div></div>
+                  <strong id="outcomeBarValue">¥0</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="add" class="view" aria-labelledby="addTitle">
+          <div class="section-heading">
+            <h2 id="addTitle">Add transaction</h2>
+            <p>Record income or outcome against an access source.</p>
+          </div>
+          <form id="transactionForm" class="panel form-grid">
+            <fieldset class="segmented" aria-label="Transaction type">
+              <label><input type="radio" name="transactionType" value="income" checked> Income</label>
+              <label><input type="radio" name="transactionType" value="outcome"> Outcome</label>
+            </fieldset>
+
+            <label>
+              Amount
+              <input id="transactionAmount" type="number" min="1" step="1" inputmode="decimal" required>
+            </label>
+            <label>
+              Category
+              <select id="transactionCategory" required></select>
+            </label>
+            <label>
+              Access
+              <select id="transactionAccess" required></select>
+            </label>
+            <label class="full">
+              Note
+              <input id="transactionNote" type="text" maxlength="160" placeholder="Optional">
+            </label>
+            <label>
+              Date
+              <input id="transactionDate" type="date" required>
+            </label>
+            <div class="form-actions">
+              <button class="button primary" type="submit">Save transaction</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="transactions" class="view" aria-labelledby="transactionsTitle">
+          <div class="section-heading">
+            <h2 id="transactionsTitle">Transactions</h2>
+            <p>Search and filter your local transaction history.</p>
+          </div>
+          <div class="panel filter-grid">
+            <label>
+              Search
+              <input id="searchInput" type="search" placeholder="Category, access, note">
+            </label>
+            <label>
+              Type
+              <select id="filterType">
+                <option value="all">All</option>
+                <option value="income">Income</option>
+                <option value="outcome">Outcome</option>
+              </select>
+            </label>
+            <label>
+              Category
+              <select id="filterCategory"></select>
+            </label>
+            <label>
+              Access
+              <select id="filterAccess"></select>
+            </label>
+            <label>
+              Month
+              <input id="filterMonth" type="month">
+            </label>
+            <button id="clearFilters" class="button ghost" type="button">Clear</button>
+          </div>
+          <div id="transactionList" class="stack-list"></div>
+        </section>
+
+        <section id="categories" class="view" aria-labelledby="categoriesTitle">
+          <div class="section-heading">
+            <h2 id="categoriesTitle">Categories</h2>
+            <p>Manage labels for income and outcome.</p>
+          </div>
+          <form id="categoryForm" class="panel form-grid compact">
+            <label>
+              Name
+              <input id="categoryName" type="text" maxlength="60" required>
+            </label>
+            <label>
+              Type
+              <select id="categoryType">
+                <option value="income">Income</option>
+                <option value="outcome">Outcome</option>
+                <option value="both">Both</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button class="button primary" type="submit">Add category</button>
+            </div>
+          </form>
+          <div id="categoryList" class="stack-list"></div>
+        </section>
+
+        <section id="access" class="view" aria-labelledby="accessTitle">
+          <div class="section-heading">
+            <h2 id="accessTitle">Access</h2>
+            <p>Track payment sources and calculated balances.</p>
+          </div>
+          <form id="accessForm" class="panel form-grid compact">
+            <label>
+              Name
+              <input id="accessName" type="text" maxlength="60" required>
+            </label>
+            <label>
+              Initial balance
+              <input id="accessInitialBalance" type="number" step="1" value="0">
+            </label>
+            <div class="form-actions">
+              <button class="button primary" type="submit">Add access</button>
+            </div>
+          </form>
+          <div id="accessList" class="stack-list"></div>
+        </section>
+
+        <section id="backup" class="view" aria-labelledby="backupTitle">
+          <div class="section-heading">
+            <h2 id="backupTitle">Backup</h2>
+            <p>Export, import, or reset all local data.</p>
+          </div>
+          <div class="panel backup-actions">
+            <button id="exportButton" class="button primary" type="button">Export JSON</button>
+            <label class="file-button">
+              Import JSON
+              <input id="importFile" type="file" accept="application/json,.json">
+            </label>
+            <button id="resetButton" class="button danger" type="button">Reset all data</button>
+          </div>
+          <div id="backupStatus" class="status-box" role="status" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Primary mobile">
+      <button class="nav-link active" data-view="dashboard" type="button">Home</button>
+      <button class="nav-link" data-view="add" type="button">Add</button>
+      <button class="nav-link" data-view="transactions" type="button">List</button>
+      <button class="nav-link" data-view="categories" type="button">Cat</button>
+      <button class="nav-link" data-view="access" type="button">Access</button>
+      <button class="nav-link" data-view="backup" type="button">Backup</button>
+    </nav>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js" defer></script>
+  </body>
+</html>
