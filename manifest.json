@@ -1,7 +1,7 @@
 {
-  "name": "Minimal Finance Control",
-  "short_name": "Finance",
-  "description": "Offline-first personal finance control dashboard.",
+  "name": "Okane",
+  "short_name": "Okane",
+  "description": "Offline-first personal finance control app.",
   "start_url": "index.html",
   "scope": "./",
   "display": "standalone",

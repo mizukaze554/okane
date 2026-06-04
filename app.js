@@ -349,7 +349,7 @@ function exportData() {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = `minimal-finance-control-${todayString()}.json`;
+  link.download = `okane-${todayString()}.json`;
   link.click();
   URL.revokeObjectURL(url);
   setBackupStatus("Exported current local data.");

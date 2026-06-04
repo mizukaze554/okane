@@ -543,6 +543,47 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.about-card {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.about-card p {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.about-links {
+  display: grid;
+  gap: 8px;
+}
+
+.about-links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.about-links a::after {
+  content: "↗";
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.about-links a[href^="mailto"]::after {
+  content: "Email";
+}
+
 .backup-grid {
   display: grid;
   gap: 14px;

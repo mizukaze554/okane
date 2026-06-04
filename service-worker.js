@@ -1,4 +1,4 @@
-const CACHE_NAME = "minimal-finance-control-v2";
+const CACHE_NAME = "okane-v3";
 const ASSETS = [
   "./",
   "./index.html",
