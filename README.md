@@ -67,4 +67,4 @@ linhtetln67@gmail.com
 
 ## License
 
-Add a license file if you plan to publish or distribute this project.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
