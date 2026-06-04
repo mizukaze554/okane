@@ -1,8 +1,11 @@
 "use strict";
 
 const STORAGE_KEY = "minimalFinanceControlState";
+const THEME_KEY = "okaneThemePreference";
 const APP_VERSION = "1.0.0";
 const CURRENCY = "JPY";
+
+applyStoredTheme();
 
 let state = loadState();
 let toastTimer = null;
@@ -45,6 +48,10 @@ function bindEvents() {
     button.addEventListener("click", () => showView(button.dataset.view));
   });
 
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", () => setThemePreference(button.dataset.themeChoice));
+  });
+
   els.quickAddButton.addEventListener("click", () => showView("add"));
 
   els.transactionForm.addEventListener("submit", (event) => {
@@ -85,6 +92,34 @@ function bindEvents() {
   els.resetButton.addEventListener("click", resetData);
   window.addEventListener("online", updateNetworkStatus);
   window.addEventListener("offline", updateNetworkStatus);
+}
+
+function applyStoredTheme() {
+  const theme = localStorage.getItem(THEME_KEY) || "auto";
+  applyTheme(theme);
+}
+
+function setThemePreference(theme) {
+  if (!["auto", "light", "dark"].includes(theme)) return;
+  localStorage.setItem(THEME_KEY, theme);
+  applyTheme(theme);
+  renderThemeControls();
+  showToast(theme === "auto" ? "Theme follows system." : `${capitalize(theme)} theme saved.`);
+}
+
+function applyTheme(theme) {
+  if (theme === "auto") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.dataset.theme = theme;
+  }
+}
+
+function renderThemeControls() {
+  const theme = localStorage.getItem(THEME_KEY) || "auto";
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.themeChoice === theme);
+  });
 }
 
 function loadState() {
@@ -408,6 +443,7 @@ function validateImport(data) {
 }
 
 function renderAll() {
+  renderThemeControls();
   renderDashboard();
   renderTransactionCategoryOptions();
   renderAccessOptions();
@@ -686,4 +722,8 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
