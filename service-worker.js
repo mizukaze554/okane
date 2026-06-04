@@ -1,10 +1,13 @@
-const CACHE_NAME = "minimal-finance-control-v1";
+const CACHE_NAME = "minimal-finance-control-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./icon.svg",
+  "./icon-192.svg",
+  "./icon-512.svg"
 ];
 
 self.addEventListener("install", (event) => {

@@ -28,7 +28,7 @@ function cacheElements() {
   [
     "viewTitle", "networkStatus", "totalBalance", "totalIncome", "totalOutcome",
     "transactionCount", "monthIncome", "monthOutcome", "dashboardAccessSummary",
-    "incomeBar", "outcomeBar", "incomeBarValue", "outcomeBarValue",
+    "dashboardRecentTransactions", "quickAddButton", "incomeBar", "outcomeBar", "incomeBarValue", "outcomeBarValue",
     "transactionForm", "transactionAmount", "transactionCategory", "transactionAccess",
     "transactionNote", "transactionDate", "transactionList", "categoryForm",
     "categoryName", "categoryType", "categoryList", "accessForm", "accessName",
@@ -41,9 +41,11 @@ function cacheElements() {
 }
 
 function bindEvents() {
-  document.querySelectorAll(".nav-link").forEach((button) => {
+  document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.view));
   });
+
+  els.quickAddButton.addEventListener("click", () => showView("add"));
 
   els.transactionForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -206,9 +208,14 @@ function addTransaction() {
   });
 
   saveState();
-  els.transactionForm.reset();
+  const selectedType = type;
+  els.transactionAmount.value = "";
+  els.transactionNote.value = "";
+  document.querySelector(`input[name='transactionType'][value='${selectedType}']`).checked = true;
+  els.transactionAccess.value = accessId;
   setDefaultDate();
   renderAll();
+  els.transactionAccess.value = accessId;
   showToast("Transaction saved.");
 }
 
@@ -416,21 +423,23 @@ function renderDashboard() {
   const realTotalBalance = accessSummaries.reduce((sum, access) => sum + access.currentBalance, 0);
 
   els.totalBalance.textContent = formatMoney(realTotalBalance);
-  els.totalIncome.textContent = formatMoney(totals.totalIncome);
-  els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
-  els.transactionCount.textContent = String(totals.transactionCount);
+  if (els.totalIncome) els.totalIncome.textContent = formatMoney(totals.totalIncome);
+  if (els.totalOutcome) els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
+  if (els.transactionCount) els.transactionCount.textContent = String(totals.transactionCount);
   els.monthIncome.textContent = formatMoney(totals.monthIncome);
   els.monthOutcome.textContent = formatMoney(totals.monthOutcome);
-  els.incomeBarValue.textContent = formatMoney(totals.monthIncome);
-  els.outcomeBarValue.textContent = formatMoney(totals.monthOutcome);
+  if (els.incomeBarValue) els.incomeBarValue.textContent = formatMoney(totals.monthIncome);
+  if (els.outcomeBarValue) els.outcomeBarValue.textContent = formatMoney(totals.monthOutcome);
 
   const maxMonthly = Math.max(totals.monthIncome, totals.monthOutcome, 1);
-  els.incomeBar.style.width = `${(totals.monthIncome / maxMonthly) * 100}%`;
-  els.outcomeBar.style.width = `${(totals.monthOutcome / maxMonthly) * 100}%`;
+  if (els.incomeBar) els.incomeBar.style.width = `${(totals.monthIncome / maxMonthly) * 100}%`;
+  if (els.outcomeBar) els.outcomeBar.style.width = `${(totals.monthOutcome / maxMonthly) * 100}%`;
 
   els.dashboardAccessSummary.innerHTML = accessSummaries.length
     ? accessSummaries.map(renderAccessSummaryCard).join("")
-    : `<div class="empty">Add an access source to start tracking balances.</div>`;
+    : `<div class="empty"><strong>No access yet</strong>Add an access source to start tracking balances.</div>`;
+
+  renderDashboardRecentTransactions();
 }
 
 function renderTransactions() {
@@ -438,9 +447,21 @@ function renderTransactions() {
 
   els.transactionList.innerHTML = transactions.length
     ? transactions.map(renderTransactionCard).join("")
-    : `<div class="empty">No transactions match this view.</div>`;
+    : `<div class="empty"><strong>No transactions yet</strong>Add your first income or outcome.</div>`;
 
   els.transactionList.querySelectorAll("[data-delete-transaction]").forEach((button) => {
+    button.addEventListener("click", () => deleteTransaction(button.dataset.deleteTransaction));
+  });
+}
+
+function renderDashboardRecentTransactions() {
+  const recent = getSortedTransactions().slice(0, 5);
+
+  els.dashboardRecentTransactions.innerHTML = recent.length
+    ? recent.map(renderTransactionCard).join("")
+    : `<div class="empty"><strong>No transactions yet</strong>Add your first income or outcome.</div>`;
+
+  els.dashboardRecentTransactions.querySelectorAll("[data-delete-transaction]").forEach((button) => {
     button.addEventListener("click", () => deleteTransaction(button.dataset.deleteTransaction));
   });
 }
@@ -448,17 +469,15 @@ function renderTransactions() {
 function renderCategories() {
   els.categoryList.innerHTML = state.categories.length
     ? state.categories.map((category) => `
-        <article class="list-card">
-          <div class="list-card-header">
-            <div>
-              <p class="list-title">${escapeHtml(category.name)} <span class="pill">${category.type}</span></p>
-              <p class="meta">${countCategoryTransactions(category.id)} transactions</p>
-            </div>
-            <button class="button small danger" type="button" data-delete-category="${category.id}">Delete</button>
+        <article class="finance-row">
+          <div class="row-main">
+            <p class="row-title">${escapeHtml(category.name)} <span class="pill">${category.type}</span></p>
+            <p class="row-sub">${countCategoryTransactions(category.id)} transactions</p>
           </div>
+          <button class="delete-link" type="button" data-delete-category="${category.id}">Delete</button>
         </article>
       `).join("")
-    : `<div class="empty">No categories yet.</div>`;
+    : `<div class="empty"><strong>No categories yet</strong>Add a category for income or outcome.</div>`;
 
   els.categoryList.querySelectorAll("[data-delete-category]").forEach((button) => {
     button.addEventListener("click", () => deleteCategory(button.dataset.deleteCategory));
@@ -468,19 +487,8 @@ function renderCategories() {
 function renderAccesses() {
   const summaries = calculateAccessSummaries();
   els.accessList.innerHTML = summaries.length
-    ? summaries.map((access) => `
-        <article class="list-card">
-          <div class="list-card-header">
-            <div>
-              <p class="list-title">${escapeHtml(access.name)}</p>
-              <p class="meta">Initial ${formatMoney(access.initialBalance)} · Income ${formatMoney(access.totalIncome)} · Outcome ${formatMoney(access.totalOutcome)}</p>
-              <p class="meta"><strong>Current ${formatMoney(access.currentBalance)}</strong></p>
-            </div>
-            <button class="button small danger" type="button" data-delete-access="${access.id}">Delete</button>
-          </div>
-        </article>
-      `).join("")
-    : `<div class="empty">No access sources yet.</div>`;
+    ? summaries.map((access) => renderAccessManagementRow(access)).join("")
+    : `<div class="empty"><strong>No access sources yet</strong>Add cash, bank, card, or wallet.</div>`;
 
   els.accessList.querySelectorAll("[data-delete-access]").forEach((button) => {
     button.addEventListener("click", () => deleteAccess(button.dataset.deleteAccess));
@@ -517,36 +525,45 @@ function renderTransactionCard(transaction) {
   const sign = transaction.type === "income" ? "+" : "-";
 
   return `
-    <article class="list-card">
-      <div class="list-card-header">
-        <div>
-          <p class="list-title">
-            <span class="pill ${transaction.type}">${transaction.type}</span>
-            ${escapeHtml(category?.name || "Deleted category")}
-          </p>
-          <p class="meta">${escapeHtml(access?.name || "Deleted access")} · ${formatDate(transaction.date)}</p>
-          ${transaction.note ? `<p class="meta">${escapeHtml(transaction.note)}</p>` : ""}
-        </div>
-        <div>
-          <div class="amount ${transaction.type}">${sign}${formatMoney(transaction.amount)}</div>
-          <button class="button small danger" type="button" data-delete-transaction="${transaction.id}">Delete</button>
-        </div>
+    <article class="finance-row">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(category?.name || "Deleted category")}</p>
+        <p class="row-sub">${transaction.note ? escapeHtml(transaction.note) : escapeHtml(access?.name || "Deleted access")}</p>
+        <p class="row-detail">${formatDate(transaction.date)} · ${escapeHtml(access?.name || "Deleted access")}</p>
+      </div>
+      <div class="row-side">
+        <div class="amount ${transaction.type}">${sign}${formatMoney(transaction.amount)}</div>
+        <span class="pill ${transaction.type}">${transaction.type}</span>
+        <button class="delete-link" type="button" data-delete-transaction="${transaction.id}" aria-label="Delete transaction">Delete</button>
       </div>
     </article>
   `;
 }
 
 function renderAccessSummaryCard(access) {
+  const max = Math.max(access.totalIncome, access.totalOutcome, Math.abs(access.currentBalance), 1);
+  const progress = Math.min(100, Math.max(8, (Math.abs(access.currentBalance) / max) * 100));
+
   return `
-    <article class="list-card">
-      <div class="list-card-header">
-        <div>
-          <p class="list-title">${escapeHtml(access.name)}</p>
-          <p class="meta">Initial ${formatMoney(access.initialBalance)} · Income ${formatMoney(access.totalIncome)} · Outcome ${formatMoney(access.totalOutcome)}</p>
-        </div>
-        <strong>${formatMoney(access.currentBalance)}</strong>
+    <article class="finance-row">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(access.name)}</p>
+        <p class="row-sub">Initial ${formatMoney(access.initialBalance)} · In ${formatMoney(access.totalIncome)} · Out ${formatMoney(access.totalOutcome)}</p>
       </div>
+      <div class="row-side">
+        <div class="amount">${formatMoney(access.currentBalance)}</div>
+      </div>
+      <div class="access-progress" aria-hidden="true" style="--progress: ${progress}%"><span></span></div>
     </article>
+  `;
+}
+
+function renderAccessManagementRow(access) {
+  return `
+    ${renderAccessSummaryCard(access).replace("</article>", `
+      <button class="delete-link" type="button" data-delete-access="${access.id}">Delete</button>
+      <p class="row-detail">${countAccessTransactions(access.id)} transactions</p>
+    </article>`)}
   `;
 }
 
@@ -557,8 +574,7 @@ function getFilteredTransactions() {
   const accessId = els.filterAccess.value;
   const month = els.filterMonth.value;
 
-  return [...state.transactions]
-    .sort((a, b) => `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`))
+  return getSortedTransactions()
     .filter((transaction) => type === "all" || transaction.type === type)
     .filter((transaction) => categoryId === "all" || transaction.categoryId === categoryId)
     .filter((transaction) => accessId === "all" || transaction.accessId === accessId)
@@ -571,17 +587,24 @@ function getFilteredTransactions() {
     });
 }
 
+function getSortedTransactions() {
+  return [...state.transactions].sort((a, b) => `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`));
+}
+
 function showView(viewId) {
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("active", view.id === viewId);
   });
   document.querySelectorAll(".nav-link").forEach((link) => {
-    link.classList.toggle("active", link.dataset.view === viewId);
+    const mobileMoreViews = ["more", "categories", "access", "backup"];
+    const isActive = link.dataset.view === viewId || (link.dataset.view === "more" && mobileMoreViews.includes(viewId));
+    link.classList.toggle("active", isActive);
   });
   els.viewTitle.textContent = {
     dashboard: "Dashboard",
     add: "Add Transaction",
     transactions: "Transactions",
+    more: "More",
     categories: "Categories",
     access: "Access",
     backup: "Backup"
@@ -594,6 +617,10 @@ function getTransactionType() {
 
 function countCategoryTransactions(id) {
   return state.transactions.filter((transaction) => transaction.categoryId === id).length;
+}
+
+function countAccessTransactions(id) {
+  return state.transactions.filter((transaction) => transaction.accessId === id).length;
 }
 
 function setDefaultDate() {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Minimal Finance Control icon</title>
+  <desc id="desc">A minimal black and white finance app mark with an M and balance line.</desc>
+  <rect width="512" height="512" rx="116" fill="#000"/>
+  <path d="M130 337V171h46l80 105 80-105h46v166h-52v-90l-62 84h-25l-62-84v90h-51Z" fill="#fff"/>
+  <path d="M130 386h252" stroke="#fff" stroke-width="28" stroke-linecap="round" opacity=".9"/>
+</svg>

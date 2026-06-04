@@ -10,13 +10,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%23000'/%3E%3Ctext x='96' y='121' text-anchor='middle' font-size='84' font-family='Arial,sans-serif' font-weight='700' fill='%23fff'%3EM%3C/text%3E%3C/svg%3E",
+      "src": "icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='88' fill='%23000'/%3E%3Ctext x='256' y='322' text-anchor='middle' font-size='224' font-family='Arial,sans-serif' font-weight='700' fill='%23fff'%3EM%3C/text%3E%3C/svg%3E",
+      "src": "icon-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
