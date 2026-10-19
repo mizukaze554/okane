@@ -6,9 +6,10 @@
     <meta name="theme-color" content="#000000">
     <meta name="color-scheme" content="light dark">
     <meta name="description" content="Okane is an offline-first personal finance control app.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://ipapi.co; object-src 'none'; base-uri 'self'; form-action 'self'">
     <title>Okane</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="icon-192.svg">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -23,7 +24,7 @@
           </div>
         </div>
         <nav class="nav-list">
-          <button class="nav-link active" data-view="dashboard" type="button">Dashboard</button>
+          <button class="nav-link active" data-view="dashboard" type="button" aria-current="page">Dashboard</button>
           <button class="nav-link" data-view="add" type="button">Add transaction</button>
           <button class="nav-link" data-view="transactions" type="button">Transactions</button>
           <button class="nav-link" data-view="analytics" type="button">Analytics</button>
@@ -31,7 +32,7 @@
           <button class="nav-link" data-view="recurring" type="button">Recurring</button>
           <button class="nav-link" data-view="planning" type="button">Planning</button>
           <button class="nav-link" data-view="categories" type="button">Categories</button>
-          <button class="nav-link" data-view="asset" type="button">Asset & debts</button>
+          <button class="nav-link" data-view="asset" type="button">Assets &amp; Debts</button>
           <button class="nav-link" data-view="backup" type="button">Backup</button>
         </nav>
       </aside>
@@ -40,14 +41,14 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">Okane</p>
-            <h1 id="viewTitle">Dashboard</h1>
+            <h1 id="viewTitle" tabindex="-1">Dashboard</h1>
           </div>
           <div class="offline-badge" id="networkStatus">Online</div>
         </header>
 
         <section id="dashboard" class="view active" aria-labelledby="dashboardTitle">
           <div class="balance-hero" aria-labelledby="dashboardTitle">
-            <p id="dashboardTitle" class="hero-label">Current balance</p>
+            <p id="dashboardTitle" class="hero-label">Available Balance</p>
             <strong id="totalBalance">¥0</strong>
             <span>Available after income, expenses, and debt payments</span>
             <div class="month-chips" aria-label="Current month summary">
@@ -56,11 +57,13 @@
                 <strong id="monthIncome">¥0</strong>
               </div>
               <div class="month-chip">
-                <span>Outcome this month</span>
+                <span>Expenses this month</span>
                 <strong id="monthOutcome">¥0</strong>
               </div>
             </div>
           </div>
+
+          <div id="demoBanner" class="demo-banner" hidden><div><strong>Demo data</strong><span>Explore freely—none of these numbers are real.</span></div><button id="clearDemoButton" class="button ghost small-button" type="button">Clear demo</button></div>
 
           <button id="quickAddButton" class="button primary wide" type="button">+ Add transaction</button>
 
@@ -85,7 +88,7 @@
 
         <section id="add" class="view" aria-label="Add transaction">
           <div class="section-heading">
-            <p>Quickly record income or outcome for today.</p>
+            <p>Quickly record income or an expense for today.</p>
           </div>
           <form id="transactionForm" class="transaction-panel">
             <label class="amount-field">
@@ -95,7 +98,7 @@
 
             <fieldset class="segmented" aria-label="Transaction type">
               <label><input type="radio" name="transactionType" value="income" checked><span>Income</span></label>
-              <label><input type="radio" name="transactionType" value="outcome"><span>Outcome</span></label>
+              <label><input type="radio" name="transactionType" value="outcome"><span>Expense</span></label>
             </fieldset>
 
             <div class="form-grid">
@@ -136,7 +139,7 @@
                 <select id="filterType">
                   <option value="all">All</option>
                   <option value="income">Income</option>
-                  <option value="outcome">Outcome</option>
+                  <option value="outcome">Expense</option>
                 </select>
               </label>
               <label>
@@ -192,7 +195,7 @@
         </section>
 
         <section id="recurring" class="view" aria-labelledby="recurringTitle">
-          <div class="section-heading"><h2 id="recurringTitle">Recurring money</h2><p>Automatically catch up monthly salary, rent, bills, and subscriptions when Okane opens.</p></div>
+          <div class="section-heading"><h2 id="recurringTitle">Recurring Transactions</h2><p>Automatically catch up monthly salary, rent, bills, and subscriptions when Okane opens.</p></div>
           <form id="recurringForm" class="management-form feature-form">
             <label>Name<input id="recurringName" type="text" maxlength="60" required></label>
             <label>Type<select id="recurringType"><option value="outcome">Expense</option><option value="income">Income</option></select></label>
@@ -244,10 +247,10 @@
             <button class="menu-row" data-view="planning" type="button"><span>Planning</span><strong>Budgets and savings goals</strong></button>
             <button class="menu-row" data-view="categories" type="button">
               <span>Categories</span>
-              <strong>Income and outcome labels</strong>
+              <strong>Income and expense labels</strong>
             </button>
             <button class="menu-row" data-view="asset" type="button">
-              <span>Asset & debts</span>
+              <span>Assets &amp; Debts</span>
               <strong>Balance, debts, and payments</strong>
             </button>
             <button class="menu-row" data-view="backup" type="button">
@@ -255,6 +258,17 @@
               <strong>Export, import, reset</strong>
             </button>
           </div>
+          <section class="theme-card" aria-labelledby="currencyTitle">
+            <h3 id="currencyTitle">Currency</h3>
+            <p>Choose how money is displayed everywhere. Changing currency does not convert or alter your stored amounts.</p>
+            <form id="currencyForm" class="currency-form">
+              <label>Display currency<select id="currencySelect" required></select></label>
+              <div class="currency-preview"><span>Preview</span><strong id="currencyPreview">¥1,234</strong></div>
+              <div class="dialog-actions"><button id="detectCurrencyButton" class="button ghost" type="button">Detect from IP</button><button class="button primary" type="submit">Save currency</button></div>
+            </form>
+            <p id="currencyStatus" class="setting-status" role="status"></p>
+            <p class="privacy-note">Automatic detection makes one request to ipapi.co and stores only the resulting currency code locally.</p>
+          </section>
           <section class="theme-card" aria-labelledby="themeTitle">
             <h3 id="themeTitle">Theme</h3>
             <p>Choose a fixed theme, or keep following your system setting.</p>
@@ -284,7 +298,7 @@
         <section id="categories" class="view" aria-labelledby="categoriesTitle">
           <div class="section-heading">
             <h2 id="categoriesTitle">Categories</h2>
-            <p>Manage labels for income and outcome.</p>
+            <p>Manage labels for income and expenses.</p>
           </div>
           <form id="categoryForm" class="management-form">
             <label>
@@ -295,7 +309,7 @@
               Type
               <select id="categoryType">
                 <option value="income">Income</option>
-                <option value="outcome">Outcome</option>
+                <option value="outcome">Expense</option>
                 <option value="both">Both</option>
               </select>
             </label>
@@ -306,14 +320,15 @@
 
         <section id="asset" class="view" aria-labelledby="assetTitle">
           <div class="section-heading">
-            <h2 id="assetTitle">Asset and debts</h2>
+            <h2 id="assetTitle">Assets &amp; Debts</h2>
             <p>Okane uses one asset balance. Debt payments are deducted from it automatically.</p>
           </div>
           <div class="metric-grid asset-summary" aria-label="Asset and debt summary">
-            <article class="metric-card"><span>Available asset</span><strong id="assetCurrentBalance">¥0</strong></article>
+            <article class="metric-card"><span>Available Balance</span><strong id="assetCurrentBalance">¥0</strong></article>
             <article class="metric-card"><span>Debt remaining</span><strong id="assetDebtTotal">¥0</strong></article>
             <article class="metric-card"><span>Net position</span><strong id="assetNetPosition">¥0</strong></article>
           </div>
+          <p class="summary-note">Available balance is spendable money. Net position subtracts your remaining debts.</p>
           <form id="assetForm" class="management-form">
             <label>
               Opening asset balance
@@ -372,11 +387,45 @@
     </div>
 
     <nav class="bottom-nav" aria-label="Primary mobile">
-      <button class="nav-link active" data-view="dashboard" type="button"><span>Home</span></button>
+      <button class="nav-link active" data-view="dashboard" type="button" aria-current="page"><span>Home</span></button>
       <button class="nav-link" data-view="add" type="button"><span>Add</span></button>
       <button class="nav-link" data-view="transactions" type="button"><span>List</span></button>
       <button class="nav-link" data-view="more" type="button"><span>More</span></button>
     </nav>
+
+    <dialog id="onboardingDialog" class="onboarding-dialog" aria-labelledby="onboardingTitle1">
+      <div class="onboarding-shell">
+        <div id="onboardingProgress" class="onboarding-progress" role="progressbar" aria-label="Onboarding progress" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1"><span id="onboardingProgressBar"></span></div>
+        <section class="onboarding-step active" data-onboarding-step="1">
+          <p class="eyebrow">Welcome</p><h2 id="onboardingTitle1">Take control of your money</h2>
+          <p>Okane keeps your finance data private on this device and makes everyday spending easy to understand.</p>
+          <div class="onboarding-feature-list"><span>One clear available balance</span><span>Debts, budgets, and transport</span><span>Useful monthly analytics</span></div>
+          <button id="onboardingDemoButton" class="button ghost wide" type="button">Explore with demo data</button>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="2">
+          <p class="eyebrow">Step 1 of 3</p><h2 id="onboardingTitle2">Set your starting balance</h2>
+          <p>Enter the money currently available to you. You can correct this later.</p>
+          <label class="amount-field">Starting balance<input id="onboardingBalance" type="number" min="0" value="0" inputmode="decimal" required></label>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="3">
+          <p class="eyebrow">Step 2 of 3</p><h2 id="onboardingTitle3">Add monthly income</h2>
+          <p>Okane can create this income automatically each month. Leave it at zero to skip.</p>
+          <label class="amount-field">Monthly income<input id="onboardingIncome" type="number" min="0" value="0" inputmode="decimal" required></label>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="4">
+          <p class="eyebrow">Step 3 of 3</p><h2 id="onboardingTitle4">Add your first expense</h2>
+          <p>Start with something recent, or leave the amount at zero and add it later.</p>
+          <label class="amount-field">Expense amount<input id="onboardingExpense" type="number" min="0" value="0" inputmode="decimal" required></label>
+          <div class="form-grid"><label>Category<select id="onboardingExpenseCategory"></select></label><label>Note<input id="onboardingExpenseNote" type="text" maxlength="160" placeholder="Optional memo"></label></div>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="5">
+          <p class="eyebrow">You’re ready</p><h2 id="onboardingTitle5">Your dashboard is set up</h2>
+          <p id="onboardingCompleteSummary">Okane is ready for your first month.</p>
+          <div class="onboarding-feature-list"><span>Use Add for everyday transactions</span><span>Check Analytics for spending patterns</span><span>Export JSON backups regularly</span></div>
+        </section>
+        <div class="onboarding-actions"><button id="onboardingSkipButton" class="text-link" type="button">Skip setup</button><div><button id="onboardingBackButton" class="button ghost" type="button" hidden>Back</button><button id="onboardingNextButton" class="button primary" type="button">Get started</button></div></div>
+      </div>
+    </dialog>
 
     <dialog id="amountDialog" class="amount-dialog" aria-labelledby="amountDialogTitle">
       <form id="amountDialogForm" method="dialog">

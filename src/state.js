@@ -1,16 +1,17 @@
 import { APP_VERSION, HISTORY_KEY, STORAGE_KEY } from "./config.js";
-import { createId, isValidDate, todayString } from "./utils.js";
+import { createId, isValidCurrency, isValidDate, todayString } from "./utils.js";
 
 export function createDefaultState() {
   const createdAt = new Date().toISOString();
   const categories = [
     ...["Salary", "Gift", "Bonus", "Other Income"].map((name) => ({ name, type: "income" })),
-    ...["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Debt Payment", "Other Outcome"]
+    ...["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Debt Payment", "Other Expense"]
       .map((name) => ({ name, type: "outcome" }))
   ].map((category) => ({ id: createId(), ...category, createdAt }));
 
   return {
     version: APP_VERSION,
+    preferences: { currency: "JPY", currencyInitialized: false, currencySource: "default", onboardingComplete: false, demoMode: false },
     categories,
     asset: { initialBalance: 0, updatedAt: createdAt, history: [] },
     debts: [],
@@ -29,12 +30,28 @@ export function sanitizeState(input) {
     ? input.accounts
     : Array.isArray(input?.accesses) ? input.accesses : [];
   const sourceTransactions = Array.isArray(input?.transactions) ? input.transactions : [];
+  const hasExistingFinanceData = sourceTransactions.length > 0 || sourceAccounts.length > 0 ||
+    (Array.isArray(input?.debts) && input.debts.length > 0) || (Number(input?.asset?.initialBalance) || 0) !== 0;
+  const requestedCurrency = String(input?.preferences?.currency || "JPY").toUpperCase();
+  const preferences = {
+    currency: isValidCurrency(requestedCurrency) ? requestedCurrency : "JPY",
+    currencyInitialized: typeof input?.preferences?.currencyInitialized === "boolean"
+      ? input.preferences.currencyInitialized
+      : hasExistingFinanceData,
+    currencySource: ["ip", "locale", "manual", "default"].includes(input?.preferences?.currencySource)
+      ? input.preferences.currencySource
+      : "default",
+    onboardingComplete: typeof input?.preferences?.onboardingComplete === "boolean"
+      ? input.preferences.onboardingComplete
+      : hasExistingFinanceData,
+    demoMode: input?.preferences?.demoMode === true
+  };
 
   const categories = sourceCategories
     .filter((item) => item?.id && item?.name)
     .map((item) => ({
       id: String(item.id),
-      name: String(item.name).slice(0, 60),
+      name: String(item.name).toLowerCase() === "other outcome" ? "Other Expense" : String(item.name).slice(0, 60),
       type: ["income", "outcome", "both"].includes(item.type) ? item.type : "both",
       createdAt: item.createdAt || new Date().toISOString()
     }));
@@ -109,6 +126,7 @@ export function sanitizeState(input) {
 
   return {
     version: APP_VERSION,
+    preferences,
     categories: ensureDebtCategory(categories.length ? categories : defaults.categories),
     asset,
     debts,

@@ -36,6 +36,29 @@ test("new users start with one asset and no accounts", () => {
   assert.equal(state.asset.initialBalance, 0);
   assert.deepEqual(state.debts, []);
   assert.equal("accounts" in state, false);
+  assert.deepEqual(state.preferences, {
+    currency: "JPY", currencyInitialized: false, currencySource: "default", onboardingComplete: false, demoMode: false
+  });
+});
+
+test("keeps legacy finance data in JPY until the user changes it", () => {
+  const state = sanitizeState({
+    categories: [], asset: { initialBalance: 1000 }, transactions: []
+  });
+  assert.deepEqual(state.preferences, {
+    currency: "JPY", currencyInitialized: true, currencySource: "default", onboardingComplete: true, demoMode: false
+  });
+});
+
+test("preserves a valid saved currency and rejects invalid codes", () => {
+  const usd = sanitizeState({ categories: [], asset: { initialBalance: 0 }, transactions: [], preferences: {
+    currency: "usd", currencyInitialized: true, currencySource: "manual"
+  } });
+  const invalid = sanitizeState({ categories: [], asset: { initialBalance: 0 }, transactions: [], preferences: {
+    currency: "money", currencyInitialized: true, currencySource: "manual"
+  } });
+  assert.equal(usd.preferences.currency, "USD");
+  assert.equal(invalid.preferences.currency, "JPY");
 });
 
 test("keeps and restores local recovery snapshots", () => {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Okane maskable icon</title>
+  <desc id="desc">A black finance app icon with a white M-shaped balance line inside the safe area.</desc>
+  <rect width="512" height="512" fill="#000"/>
+  <path d="M150 332V180h42l64 82 64-82h42v152h-47v-81l-49 65h-20l-49-65v81h-47Z" fill="#fff"/>
+  <path d="M150 375h212" stroke="#fff" stroke-width="25" stroke-linecap="round" opacity=".9"/>
+</svg>

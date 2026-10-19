@@ -64,6 +64,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   color-scheme: light dark;
   touch-action: pan-x pan-y;
@@ -197,6 +201,28 @@ h3 {
 .balance-hero {
   padding: 24px;
   margin-bottom: 14px;
+}
+
+.demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.demo-banner div {
+  display: grid;
+  gap: 3px;
+}
+
+.demo-banner span {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .hero-label {
@@ -424,6 +450,11 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+#viewTitle:focus,
+.onboarding-step h2:focus {
+  outline: none;
+}
+
 .transaction-panel {
   padding: 18px;
 }
@@ -617,6 +648,13 @@ button:focus-visible {
   overflow-wrap: anywhere;
   margin-top: 7px;
   font-size: clamp(1.2rem, 5vw, 1.8rem);
+}
+
+.summary-note {
+  margin: -3px 2px 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .chart-list {
@@ -828,6 +866,43 @@ button:focus-visible {
   line-height: 1.5;
 }
 
+.currency-form {
+  display: grid;
+  gap: 12px;
+}
+
+.currency-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--bg);
+}
+
+.currency-preview span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.currency-preview strong {
+  font-size: 1.1rem;
+}
+
+.theme-card .setting-status {
+  margin: 14px 0 0;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.theme-card .privacy-note {
+  margin: 8px 0 0;
+  font-size: 0.74rem;
+}
+
 .theme-toggle {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -914,6 +989,103 @@ button:focus-visible {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+}
+
+.onboarding-dialog {
+  width: min(620px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 28px));
+  border: 0;
+  border-radius: var(--radius-lg);
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.32);
+}
+
+.onboarding-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(5px);
+}
+
+.onboarding-shell {
+  display: grid;
+  gap: 22px;
+  overflow-y: auto;
+  max-height: min(760px, calc(100dvh - 28px));
+  padding: 24px;
+}
+
+.onboarding-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--soft);
+}
+
+.onboarding-progress span {
+  display: block;
+  width: 20%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--black);
+  transition: width 180ms ease;
+}
+
+.onboarding-step {
+  display: none;
+}
+
+.onboarding-step.active {
+  display: grid;
+  gap: 16px;
+}
+
+.onboarding-step h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 6vw, 2.5rem);
+  letter-spacing: -0.04em;
+}
+
+.onboarding-step > p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.onboarding-feature-list {
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-feature-list span {
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--bg);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.onboarding-feature-list span::before {
+  margin-right: 8px;
+  color: var(--good);
+  content: "✓";
+}
+
+.onboarding-actions,
+.onboarding-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-actions {
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.onboarding-actions .button {
+  min-width: 112px;
 }
 
 .amount-dialog::backdrop {
@@ -1226,5 +1398,20 @@ button:disabled {
 
   .finance-row {
     padding: 15px;
+  }
+
+  .onboarding-shell {
+    padding: 20px;
+  }
+
+  .onboarding-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .onboarding-actions > div,
+  .onboarding-actions .button,
+  .onboarding-actions .text-link {
+    width: 100%;
   }
 }

@@ -1,10 +1,7 @@
 import { CURRENCY } from "./config.js";
 
-const moneyFormatter = new Intl.NumberFormat("ja-JP", {
-  style: "currency",
-  currency: CURRENCY,
-  maximumFractionDigits: 0
-});
+let activeCurrency = CURRENCY;
+const moneyFormatters = new Map();
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   year: "numeric",
@@ -32,7 +29,47 @@ export function isValidDate(value) {
 }
 
 export function formatMoney(value) {
-  return moneyFormatter.format(Number(value) || 0);
+  if (!moneyFormatters.has(activeCurrency)) {
+    moneyFormatters.set(activeCurrency, new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: activeCurrency,
+      maximumFractionDigits: currencyFractionDigits(activeCurrency)
+    }));
+  }
+  return moneyFormatters.get(activeCurrency).format(Number(value) || 0);
+}
+
+export function isValidCurrency(value) {
+  const code = String(value || "").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(code)) return false;
+  if (typeof Intl.supportedValuesOf === "function" && !Intl.supportedValuesOf("currency").includes(code)) return false;
+  try {
+    new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function setCurrency(value) {
+  activeCurrency = isValidCurrency(value) ? String(value).trim().toUpperCase() : CURRENCY;
+  return activeCurrency;
+}
+
+export function getCurrency() {
+  return activeCurrency;
+}
+
+export function normalizeMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return Number.NaN;
+  const factor = 10 ** currencyFractionDigits(activeCurrency);
+  return Math.round((number + Math.sign(number) * Number.EPSILON) * factor) / factor;
+}
+
+function currencyFractionDigits(currency) {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency })
+    .resolvedOptions().maximumFractionDigits;
 }
 
 export function formatDate(value) {

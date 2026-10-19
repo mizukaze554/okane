@@ -1,20 +1,33 @@
 import { buildAnalytics, buildMonthlyTrend } from "./src/analytics.js";
 import { createTransportTransaction, generateDueRecurring, transportTotal } from "./src/automation.js";
-import { APP_VERSION, LAST_EXPORT_KEY, THEME_KEY, VIEW_TITLES } from "./src/config.js";
+import { APP_VERSION, CURRENCY_DETECTION_URL, LAST_EXPORT_KEY, THEME_KEY, VIEW_TITLES } from "./src/config.js";
 import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
 import { emptyState, transactionCard } from "./src/render.js";
 import { createDefaultState, sanitizeState, StateStore, validateImport } from "./src/state.js";
-import { capitalize, createId, escapeHtml, formatMoney, isValidDate, todayString } from "./src/utils.js";
+import { capitalize, createId, escapeHtml, formatMoney, getCurrency, isValidCurrency, isValidDate, normalizeMoney, setCurrency, todayString } from "./src/utils.js";
 
 const store = new StateStore();
 let state = store.load();
+setCurrency(state.preferences.currency);
 store.save(state);
 let editingTransactionId = null;
 let deletedTransaction = null;
 let toastTimer = null;
 let amountDialogAction = null;
 let installPromptEvent = null;
+let onboardingStep = 1;
 const els = {};
+const REGION_CURRENCY = Object.freeze({
+  JP: "JPY", US: "USD", GB: "GBP", MM: "MMK", CN: "CNY", KR: "KRW", IN: "INR",
+  TH: "THB", SG: "SGD", AU: "AUD", NZ: "NZD", CA: "CAD", CH: "CHF", BR: "BRL",
+  MX: "MXN", ID: "IDR", MY: "MYR", PH: "PHP", VN: "VND", HK: "HKD", TW: "TWD",
+  BD: "BDT", PK: "PKR", LK: "LKR", NP: "NPR", AE: "AED", SA: "SAR", TR: "TRY",
+  ZA: "ZAR", NG: "NGN", EG: "EGP", RU: "RUB", UA: "UAH", PL: "PLN", CZ: "CZK",
+  HU: "HUF", SE: "SEK", NO: "NOK", DK: "DKK", IS: "ISK", IL: "ILS",
+  AT: "EUR", BE: "EUR", CY: "EUR", DE: "EUR", EE: "EUR", ES: "EUR", FI: "EUR",
+  FR: "EUR", GR: "EUR", HR: "EUR", IE: "EUR", IT: "EUR", LT: "EUR", LU: "EUR",
+  LV: "EUR", MT: "EUR", NL: "EUR", PT: "EUR", SI: "EUR", SK: "EUR"
+});
 
 applyStoredTheme();
 
@@ -25,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   runRecurringAutomation();
   updateNetworkStatus();
   renderAll();
+  void initializeFirstRun();
   const requestedView = new URLSearchParams(location.search).get("view");
   if (requestedView && VIEW_TITLES[requestedView]) showView(requestedView);
   registerServiceWorker();
@@ -36,12 +50,12 @@ function cacheElements() {
 
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => showView(button.dataset.view));
+    button.addEventListener("click", () => showView(button.dataset.view, { focus: true }));
   });
   document.querySelectorAll("[data-theme-choice]").forEach((button) => {
     button.addEventListener("click", () => setThemePreference(button.dataset.themeChoice));
   });
-  els.quickAddButton.addEventListener("click", () => showView("add"));
+  els.quickAddButton.addEventListener("click", () => showView("add", { focus: true }));
   els.transactionForm.addEventListener("submit", saveTransaction);
   els.transactionCancelEdit.addEventListener("click", resetTransactionForm);
   document.querySelectorAll("input[name='transactionType']").forEach((input) => {
@@ -68,7 +82,16 @@ function bindEvents() {
   els.importFile.addEventListener("change", importData);
   els.resetButton.addEventListener("click", resetData);
   els.clearSnapshotsButton.addEventListener("click", clearSnapshots);
+  els.currencyForm.addEventListener("submit", saveCurrencyPreference);
+  els.currencySelect.addEventListener("change", renderCurrencyPreview);
+  els.detectCurrencyButton.addEventListener("click", () => void detectCurrency(true));
   els.installButton.addEventListener("click", installApp);
+  els.onboardingNextButton.addEventListener("click", advanceOnboarding);
+  els.onboardingBackButton.addEventListener("click", goBackOnboarding);
+  els.onboardingSkipButton.addEventListener("click", skipOnboarding);
+  els.onboardingDemoButton.addEventListener("click", enableDemoMode);
+  els.onboardingDialog.addEventListener("cancel", (event) => event.preventDefault());
+  els.clearDemoButton.addEventListener("click", clearDemoMode);
   els.amountDialogForm.addEventListener("submit", submitAmountDialog);
   els.amountDialogCancel.addEventListener("click", closeAmountDialog);
   els.amountDialogClose.addEventListener("click", closeAmountDialog);
@@ -98,7 +121,7 @@ function commit(message) {
 function saveTransaction(event) {
   event.preventDefault();
   const type = document.querySelector("input[name='transactionType']:checked").value;
-  const amount = Number(els.transactionAmount.value);
+  const amount = normalizeMoney(els.transactionAmount.value);
   const categoryId = els.transactionCategory.value;
   const date = els.transactionDate.value;
   if (!positiveAmount(amount)) return showToast("Amount must be greater than 0.");
@@ -196,7 +219,7 @@ function deleteCategory(id) {
 
 function updateAsset(event) {
   event.preventDefault();
-  const initialBalance = Number(els.assetInitialBalance.value);
+  const initialBalance = normalizeMoney(els.assetInitialBalance.value);
   if (!Number.isFinite(initialBalance)) return showToast("Enter a valid asset balance.");
   const previousBalance = Number(state.asset.initialBalance) || 0;
   if (initialBalance === previousBalance) return showToast("Opening balance is unchanged.");
@@ -216,7 +239,7 @@ function updateAsset(event) {
 function addDebt(event) {
   event.preventDefault();
   const name = els.debtName.value.trim();
-  const originalAmount = Number(els.debtAmount.value);
+  const originalAmount = normalizeMoney(els.debtAmount.value);
   if (!name || !positiveAmount(originalAmount)) return showToast("Enter a debt name and amount.");
   if (state.debts.some((item) => item.name.toLowerCase() === name.toLowerCase())) return showToast("That debt already exists.");
   state.debts.unshift({ id: createId(), name, originalAmount, createdAt: new Date().toISOString() });
@@ -232,7 +255,7 @@ function payDebt(id) {
   openAmountDialog({
     type: "debt", id, title: `Pay ${debt.name}`,
     description: `${formatMoney(debt.remaining)} remaining · ${formatMoney(available)} available`,
-    label: "Payment amount", value: Math.min(debt.remaining, available), min: 1,
+    label: "Payment amount", value: Math.min(debt.remaining, available), min: moneyInputStep(),
     max: Math.min(debt.remaining, available), showDate: true, submitLabel: "Record payment"
   });
 }
@@ -265,8 +288,8 @@ function addTransportRule(event) {
   const rule = {
     id: createId(),
     name: els.transportName.value.trim(),
-    goFare: Number(els.transportGoFare.value),
-    returnFare: Number(els.transportReturnFare.value),
+    goFare: normalizeMoney(els.transportGoFare.value),
+    returnFare: normalizeMoney(els.transportReturnFare.value),
     days: Number(els.transportDays.value),
     month: els.transportMonth.value,
     categoryId: els.transportCategory.value,
@@ -315,7 +338,7 @@ function addRecurringRule(event) {
   event.preventDefault();
   const rule = {
     id: createId(), name: els.recurringName.value.trim(), type: els.recurringType.value,
-    amount: Number(els.recurringAmount.value), day: Number(els.recurringDay.value),
+    amount: normalizeMoney(els.recurringAmount.value), day: Number(els.recurringDay.value),
     startMonth: els.recurringStartMonth.value,
     categoryId: els.recurringCategory.value, active: true, createdAt: new Date().toISOString()
   };
@@ -354,7 +377,7 @@ function saveBudget(event) {
   event.preventDefault();
   const month = els.budgetMonth.value;
   const categoryId = els.budgetCategory.value;
-  const limit = Number(els.budgetLimit.value);
+  const limit = normalizeMoney(els.budgetLimit.value);
   if (!month || !categoryId || !positiveAmount(limit)) return showToast("Complete the budget.");
   const existing = state.budgets.find((item) => item.month === month && item.categoryId === categoryId);
   if (existing) existing.limit = limit;
@@ -371,8 +394,8 @@ function deleteBudget(id) {
 function addSavingsGoal(event) {
   event.preventDefault();
   const goal = {
-    id: createId(), name: els.savingsName.value.trim(), targetAmount: Number(els.savingsTarget.value),
-    savedAmount: Number(els.savingsSaved.value), targetDate: els.savingsDate.value,
+    id: createId(), name: els.savingsName.value.trim(), targetAmount: normalizeMoney(els.savingsTarget.value),
+    savedAmount: normalizeMoney(els.savingsSaved.value), targetDate: els.savingsDate.value,
     createdAt: new Date().toISOString()
   };
   if (!goal.name || !positiveAmount(goal.targetAmount) || goal.savedAmount < 0) return showToast("Complete the savings goal.");
@@ -407,6 +430,8 @@ function deleteSavingsGoal(id) {
 }
 
 function renderAll() {
+  setCurrency(state.preferences.currency);
+  renderCurrencySettings();
   renderThemeControls();
   renderTransactionCategoryOptions();
   renderRecurringCategoryOptions();
@@ -426,6 +451,7 @@ function renderAll() {
 
 function renderDashboard() {
   const totals = calculateTotals(state);
+  els.demoBanner.hidden = !state.preferences.demoMode;
   els.totalBalance.textContent = formatMoney(calculateAssetBalance(state));
   els.totalIncome.textContent = formatMoney(totals.totalIncome);
   els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
@@ -458,9 +484,9 @@ function bindTransactionActions(container) {
 
 function renderCategories() {
   els.categoryList.innerHTML = state.categories.length ? state.categories.map((category) => `
-    <article class="finance-row"><div class="row-main"><p class="row-title">${escapeHtml(category.name)} <span class="pill">${category.type}</span></p>
+    <article class="finance-row"><div class="row-main"><p class="row-title">${escapeHtml(category.name)} <span class="pill">${category.type === "outcome" ? "expense" : category.type}</span></p>
     <p class="row-sub">${state.transactions.filter((item) => item.categoryId === category.id).length} transactions</p></div>
-    <button class="delete-link" type="button" data-delete-category="${escapeHtml(category.id)}">Delete</button></article>`).join("") : emptyState("No categories yet", "Add an income or outcome category.");
+    <button class="delete-link" type="button" data-delete-category="${escapeHtml(category.id)}">Delete</button></article>`).join("") : emptyState("No categories yet", "Add an income or expense category.");
   bindDataAction(els.categoryList, "delete-category", deleteCategory);
 }
 
@@ -511,7 +537,7 @@ function renderTransport() {
 
 function renderRecurring() {
   els.recurringList.innerHTML = state.recurringRules.length ? state.recurringRules.map((rule) => `
-    <article class="finance-row"><div class="row-main"><p class="row-title">${escapeHtml(rule.name)} <span class="pill ${rule.type}">${rule.type}</span></p>
+    <article class="finance-row"><div class="row-main"><p class="row-title">${escapeHtml(rule.name)} <span class="pill ${rule.type}">${rule.type === "income" ? "income" : "expense"}</span></p>
     <p class="row-sub">${formatMoney(rule.amount)} on day ${rule.day} · from ${rule.startMonth} · ${rule.active ? "Active" : "Paused"}</p></div>
     <div class="inline-actions"><button class="button ghost small-button" data-toggle-recurring="${escapeHtml(rule.id)}" type="button">${rule.active ? "Pause" : "Enable"}</button>
     <button class="delete-link" data-delete-recurring="${escapeHtml(rule.id)}" type="button">Delete</button></div></article>`).join("") : emptyState("No recurring rules", "Automate monthly income or expenses.");
@@ -661,6 +687,7 @@ function restoreSnapshot(id) {
     setDefaults();
     commit("Local snapshot restored.");
     setBackupStatus("Recovery snapshot restored successfully.");
+    void initializeFirstRun();
   } catch (error) {
     setBackupStatus(`Restore failed: ${error.message}`);
     showToast("Snapshot restore failed.");
@@ -699,6 +726,7 @@ function importData(event) {
       runRecurringAutomation();
       commit("Import complete.");
       setBackupStatus("Imported data successfully.");
+      void initializeFirstRun();
     } catch (error) {
       setBackupStatus(`Import failed: ${error.message}`);
       showToast("Import failed.");
@@ -715,17 +743,22 @@ function resetData() {
   setDefaults();
   commit("Data reset.");
   setBackupStatus("All data reset and defaults restored.");
+  void initializeFirstRun();
 }
 
-function showView(viewId) {
+function showView(viewId, { focus = false } = {}) {
   if (!VIEW_TITLES[viewId]) return;
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
   document.querySelectorAll(".nav-link").forEach((link) => {
     const moreViews = ["more", "categories", "asset", "backup", "transport", "recurring", "planning", "analytics"];
-    link.classList.toggle("active", link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId)));
+    const isActive = link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId));
+    link.classList.toggle("active", isActive);
+    if (isActive) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   });
   els.viewTitle.textContent = VIEW_TITLES[viewId];
   window.scrollTo({ top: 0, behavior: "smooth" });
+  if (focus) requestAnimationFrame(() => els.viewTitle.focus());
 }
 
 function setDefaults() {
@@ -744,6 +777,253 @@ function setFeatureDefaults() {
 }
 
 function positiveAmount(value) { return Number.isFinite(value) && value > 0; }
+async function initializeFirstRun() {
+  if (!state.preferences.onboardingComplete) showOnboarding();
+  await initializeCurrency();
+}
+function showOnboarding() {
+  onboardingStep = 1;
+  const outcomes = state.categories.filter((item) => item.type === "outcome" || item.type === "both");
+  setSelectOptions(els.onboardingExpenseCategory, outcomes, "Choose category", outcomes[0]?.id || "");
+  updateMoneyInputPrecision();
+  renderOnboardingStep();
+  if (!els.onboardingDialog.open) els.onboardingDialog.showModal();
+}
+function renderOnboardingStep() {
+  document.querySelectorAll("[data-onboarding-step]").forEach((section) => {
+    section.classList.toggle("active", Number(section.dataset.onboardingStep) === onboardingStep);
+  });
+  els.onboardingProgressBar.style.width = `${onboardingStep / 5 * 100}%`;
+  els.onboardingProgress.setAttribute("aria-valuenow", String(onboardingStep));
+  els.onboardingBackButton.hidden = onboardingStep === 1 || onboardingStep === 5;
+  els.onboardingSkipButton.hidden = onboardingStep === 5;
+  els.onboardingNextButton.textContent = onboardingStep === 1 ? "Get started" :
+    onboardingStep === 4 ? "Finish setup" : onboardingStep === 5 ? "Open dashboard" : "Continue";
+  const heading = document.querySelector(`[data-onboarding-step="${onboardingStep}"] h2`);
+  if (heading?.id) els.onboardingDialog.setAttribute("aria-labelledby", heading.id);
+  heading?.setAttribute("tabindex", "-1");
+  requestAnimationFrame(() => heading?.focus());
+}
+function advanceOnboarding() {
+  if (onboardingStep === 5) {
+    els.onboardingDialog.close();
+    showView("dashboard", { focus: true });
+    return;
+  }
+  if (onboardingStep === 2) {
+    const value = normalizeMoney(els.onboardingBalance.value);
+    if (!Number.isFinite(value) || value < 0) return showToast("Enter a valid starting balance.");
+  }
+  if (onboardingStep === 3) {
+    const value = normalizeMoney(els.onboardingIncome.value);
+    if (!Number.isFinite(value) || value < 0) return showToast("Enter a valid monthly income or zero.");
+  }
+  if (onboardingStep === 4) {
+    const value = normalizeMoney(els.onboardingExpense.value);
+    if (!Number.isFinite(value) || value < 0) return showToast("Enter a valid expense or zero.");
+    if (value > 0 && !state.categories.some((item) => item.id === els.onboardingExpenseCategory.value)) {
+      return showToast("Choose an expense category.");
+    }
+    completeOnboardingSetup();
+    onboardingStep = 5;
+    renderOnboardingStep();
+    return;
+  }
+  onboardingStep += 1;
+  renderOnboardingStep();
+}
+function goBackOnboarding() {
+  if (onboardingStep > 1 && onboardingStep < 5) {
+    onboardingStep -= 1;
+    renderOnboardingStep();
+  }
+}
+function skipOnboarding() {
+  state.preferences = { ...state.preferences, onboardingComplete: true, demoMode: false };
+  els.onboardingDialog.close();
+  commit("Setup skipped. You can start adding transactions anytime.");
+  showView("dashboard", { focus: true });
+}
+function completeOnboardingSetup() {
+  const balance = normalizeMoney(els.onboardingBalance.value);
+  const income = normalizeMoney(els.onboardingIncome.value);
+  const expense = normalizeMoney(els.onboardingExpense.value);
+  const now = new Date().toISOString();
+  const today = todayString();
+  const month = today.slice(0, 7);
+  state.asset = { initialBalance: balance, updatedAt: now, history: [] };
+  if (income > 0) {
+    const category = state.categories.find((item) => item.type === "income" && item.name.toLowerCase() === "salary") ||
+      state.categories.find((item) => item.type === "income" || item.type === "both");
+    const ruleId = createId();
+    state.recurringRules.unshift({
+      id: ruleId, name: "Monthly income", type: "income", amount: income,
+      day: new Date().getDate(), startMonth: month, categoryId: category.id, active: true, createdAt: now
+    });
+    state.transactions.unshift({
+      id: createId(), type: "income", amount: income, categoryId: category.id, note: "Monthly income",
+      date: today, sourceType: "recurring", sourceId: ruleId, sourcePeriod: month, createdAt: now
+    });
+  }
+  if (expense > 0) {
+    state.transactions.unshift({
+      id: createId(), type: "outcome", amount: expense, categoryId: els.onboardingExpenseCategory.value,
+      note: els.onboardingExpenseNote.value.trim(), date: today, sourceType: "manual", sourceId: "",
+      sourcePeriod: "", createdAt: now
+    });
+  }
+  state.preferences = { ...state.preferences, onboardingComplete: true, demoMode: false };
+  store.save(state, { snapshot: true });
+  renderAll();
+  els.onboardingCompleteSummary.textContent = `Your available balance is ${formatMoney(calculateAssetBalance(state))}. Everything is saved on this device.`;
+}
+function enableDemoMode() {
+  const preferences = { ...state.preferences, onboardingComplete: true, demoMode: true };
+  state = createDefaultState();
+  state.preferences = preferences;
+  const amount = (value) => normalizeMoney(value);
+  const now = new Date().toISOString();
+  const today = todayString();
+  const month = today.slice(0, 7);
+  const category = (name) => state.categories.find((item) => item.name === name)?.id || "";
+  state.asset = { initialBalance: amount(5000), updatedAt: now, history: [] };
+  [
+    ["income", 3000, "Salary", "Monthly salary", 0],
+    ["outcome", 950, "Bills", "Rent and utilities", 14],
+    ["outcome", 180, "Food", "Groceries", 10],
+    ["outcome", 65, "Transport", "Commute", 7],
+    ["outcome", 45, "Entertainment", "Weekend", 3],
+    ["outcome", 28, "Food", "Lunch", 0]
+  ].forEach(([type, value, categoryName, note, daysAgo]) => state.transactions.push({
+    id: createId(), type, amount: amount(value), categoryId: category(categoryName), note,
+    date: localDateOffset(-daysAgo), sourceType: "demo", sourceId: "", sourcePeriod: "", createdAt: now
+  }));
+  const salaryRuleId = createId();
+  state.recurringRules.push({
+    id: salaryRuleId, name: "Monthly salary", type: "income", amount: amount(3000), day: 3,
+    startMonth: month, categoryId: category("Salary"), active: true, createdAt: now
+  });
+  const salaryTransaction = state.transactions.find((item) => item.type === "income");
+  Object.assign(salaryTransaction, { sourceType: "recurring", sourceId: salaryRuleId, sourcePeriod: month });
+  state.budgets.push({ id: createId(), month, categoryId: category("Food"), limit: amount(500), createdAt: now });
+  state.savingsGoals.push({ id: createId(), name: "Emergency fund", targetAmount: amount(6000), savedAmount: amount(1800), targetDate: "", createdAt: now });
+  state.debts.push({ id: createId(), name: "Example credit", originalAmount: amount(800), createdAt: now });
+  els.onboardingDialog.close();
+  commit("Demo mode ready. Explore every section.");
+  showView("dashboard", { focus: true });
+}
+function clearDemoMode() {
+  if (!state.preferences.demoMode || !confirm("Clear all demo data and start with an empty dashboard?")) return;
+  const preferences = { ...state.preferences, onboardingComplete: true, demoMode: false };
+  state = createDefaultState();
+  state.preferences = preferences;
+  setDefaults();
+  commit("Demo data cleared.");
+}
+function localDateOffset(dayOffset) {
+  const date = new Date();
+  date.setDate(date.getDate() + dayOffset);
+  return todayString(date);
+}
+async function initializeCurrency() {
+  if (state.preferences.currencyInitialized) return;
+  await detectCurrency(false);
+}
+async function detectCurrency(manual = false) {
+  if (!navigator.onLine) {
+    if (manual) return showToast("Connect to the internet to detect currency from IP.");
+    return applyLocaleCurrencyFallback();
+  }
+  els.detectCurrencyButton.disabled = true;
+  els.currencyStatus.textContent = "Detecting currency from network location…";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch(CURRENCY_DETECTION_URL, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(`Detection returned ${response.status}.`);
+    const currency = (await response.text()).trim().toUpperCase();
+    if (!isValidCurrency(currency)) throw new Error("Detection returned an invalid currency.");
+    state.preferences = { ...state.preferences, currency, currencyInitialized: true, currencySource: "ip" };
+    setCurrency(currency);
+    if (manual) commit(`Currency detected as ${currency}.`);
+    else {
+      store.save(state);
+      renderAll();
+    }
+  } catch (error) {
+    console.warn("Unable to detect currency from IP", error);
+    if (manual) showToast("Currency detection failed. Your current choice was kept.");
+    else applyLocaleCurrencyFallback();
+  } finally {
+    clearTimeout(timeout);
+    els.detectCurrencyButton.disabled = false;
+  }
+}
+function applyLocaleCurrencyFallback() {
+  let region = "";
+  try { region = new Intl.Locale(navigator.language).maximize().region || ""; } catch { /* Use JPY below. */ }
+  const currency = REGION_CURRENCY[region] || "JPY";
+  state.preferences = { ...state.preferences, currency, currencyInitialized: false, currencySource: "locale" };
+  setCurrency(currency);
+  store.save(state);
+  renderAll();
+}
+function saveCurrencyPreference(event) {
+  event.preventDefault();
+  const currency = els.currencySelect.value.toUpperCase();
+  if (!isValidCurrency(currency)) return showToast("Choose a valid currency.");
+  if (currency === state.preferences.currency && state.preferences.currencyInitialized) {
+    return showToast(`${currency} is already selected.`);
+  }
+  state.preferences = { ...state.preferences, currency, currencyInitialized: true, currencySource: "manual" };
+  setCurrency(currency);
+  commit(`Currency changed to ${currency}. Stored amounts were not converted.`);
+}
+function renderCurrencySettings() {
+  const selected = state.preferences.currency;
+  if (!els.currencySelect.options.length) {
+    const codes = typeof Intl.supportedValuesOf === "function"
+      ? Intl.supportedValuesOf("currency")
+      : ["JPY", "USD", "EUR", "GBP", "MMK", "CNY", "KRW", "INR", "THB", "SGD", "AUD", "CAD"];
+    if (!codes.includes(selected)) codes.push(selected);
+    let names;
+    try { names = new Intl.DisplayNames(navigator.languages, { type: "currency" }); } catch { names = null; }
+    els.currencySelect.innerHTML = codes.sort().map((code) => {
+      const name = names?.of(code);
+      return `<option value="${code}">${code}${name && name !== code ? ` — ${escapeHtml(name)}` : ""}</option>`;
+    }).join("");
+  }
+  els.currencySelect.value = selected;
+  const sourceText = {
+    ip: "Detected from your network location and saved on this device.",
+    locale: "Estimated from browser language while IP detection is unavailable.",
+    manual: "Selected manually and saved on this device.",
+    default: "Using the default until automatic detection finishes."
+  };
+  els.currencyStatus.textContent = `${selected} · ${sourceText[state.preferences.currencySource] || sourceText.default}`;
+  renderCurrencyPreview();
+  updateMoneyInputPrecision();
+}
+function renderCurrencyPreview() {
+  const current = getCurrency();
+  setCurrency(els.currencySelect.value || state.preferences.currency);
+  els.currencyPreview.textContent = formatMoney(1234.56);
+  setCurrency(current);
+}
+function updateMoneyInputPrecision() {
+  const step = String(moneyInputStep());
+  ["transactionAmount", "assetInitialBalance", "debtAmount", "transportGoFare", "transportReturnFare",
+    "recurringAmount", "budgetLimit", "savingsTarget", "savingsSaved", "amountDialogAmount",
+    "onboardingBalance", "onboardingIncome", "onboardingExpense"]
+    .forEach((id) => { els[id].step = step; });
+  ["transactionAmount", "debtAmount", "recurringAmount", "budgetLimit", "savingsTarget"]
+    .forEach((id) => { els[id].min = step; });
+}
+function moneyInputStep() {
+  const digits = new Intl.NumberFormat(undefined, { style: "currency", currency: state.preferences.currency })
+    .resolvedOptions().maximumFractionDigits;
+  return digits ? 1 / (10 ** digits) : 1;
+}
 function openAmountDialog(options) {
   amountDialogAction = options;
   els.amountDialogTitle.textContent = options.title;
@@ -768,7 +1048,7 @@ function submitAmountDialog(event) {
   event.preventDefault();
   if (!amountDialogAction) return closeAmountDialog();
   const action = amountDialogAction;
-  const amount = Number(els.amountDialogAmount.value);
+  const amount = normalizeMoney(els.amountDialogAmount.value);
   if (!Number.isFinite(amount) || amount < Number(action.min ?? 0) || (Number.isFinite(action.max) && amount > action.max)) {
     return showToast("Enter an amount within the allowed range.");
   }
@@ -817,11 +1097,22 @@ function showToast(message, actionLabel = "", action = null) {
   toastTimer = setTimeout(() => els.toast.classList.remove("show"), action ? 6000 : 2800);
 }
 function updateNetworkStatus() {
-  els.networkStatus.textContent = navigator.onLine ? "Online · local" : "Offline · ready";
+  els.networkStatus.textContent = "Saved on this device";
+  els.networkStatus.title = navigator.onLine ? "Online; finance data remains local" : "Offline; app and data remain available";
   els.networkStatus.classList.toggle("is-offline", !navigator.onLine);
 }
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./service-worker.js").catch((error) => console.error("Service worker registration failed", error));
+    navigator.serviceWorker.register("./service-worker.js").then((registration) => {
+      registration.update().catch(() => {});
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        worker?.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            showToast("A new Okane version is ready.", "Reload", () => location.reload());
+          }
+        });
+      });
+    }).catch((error) => console.error("Service worker registration failed", error));
   }
 }

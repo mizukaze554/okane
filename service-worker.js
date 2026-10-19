@@ -1,4 +1,4 @@
-const CACHE_NAME = "okane-v10";
+const CACHE_NAME = "okane-v11";
 const ASSETS = [
   "./",
   "./index.html",
@@ -15,6 +15,9 @@ const ASSETS = [
   "./icon.svg",
   "./icon-192.svg",
   "./icon-512.svg",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-maskable-512.png",
   "./robots.txt"
 ];
 
@@ -35,17 +38,12 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(event.request).then((response) => {
+    fetch(event.request).then((response) => {
         if (!response || response.status !== 200 || response.type === "opaque") {
           return response;
         }
@@ -53,7 +51,11 @@ self.addEventListener("fetch", (event) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
-      }).catch(() => caches.match("./index.html"));
-    })
+      }).catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === "navigate") return caches.match("./index.html");
+        return Response.error();
+      })
   );
 });

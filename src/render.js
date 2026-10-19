@@ -18,7 +18,7 @@ export function transactionCard(transaction, state) {
       </div>
       <div class="row-side">
         <div class="amount ${transaction.type}">${sign}${formatMoney(transaction.amount)}</div>
-        <span class="pill ${transaction.type}">${transaction.type}</span>
+        <span class="pill ${transaction.type}">${transaction.type === "income" ? "income" : "expense"}</span>
         <div class="row-actions">
           ${transaction.debtId ? "" : `<button class="text-link" type="button" data-edit-transaction="${escapeHtml(transaction.id)}">Edit</button>`}
           <button class="delete-link" type="button" data-delete-transaction="${escapeHtml(transaction.id)}" aria-label="Delete transaction">Delete</button>
