@@ -1,4 +1,4 @@
-export const APP_VERSION = "7.1.0";
+export const APP_VERSION = "7.2.0";
 export const STORAGE_KEY = "minimalFinanceControlState";
 export const HISTORY_KEY = "okaneLocalSnapshots";
 export const LAST_EXPORT_KEY = "okaneLastExportAt";

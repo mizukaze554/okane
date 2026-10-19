@@ -229,6 +229,17 @@ export class StateStore {
     }
   }
 
+  subscribe(listener, eventTarget = globalThis) {
+    if (typeof eventTarget?.addEventListener !== "function") return () => {};
+    const handleStorage = (event) => {
+      if (event.storageArea && event.storageArea !== this.storage) return;
+      if (event.key !== STORAGE_KEY && event.key !== null) return;
+      listener(this.load());
+    };
+    eventTarget.addEventListener("storage", handleStorage);
+    return () => eventTarget.removeEventListener?.("storage", handleStorage);
+  }
+
   getSnapshots() {
     try {
       const snapshots = JSON.parse(this.storage.getItem(HISTORY_KEY) || "[]");

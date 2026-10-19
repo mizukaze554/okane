@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, filterTransactions } from "../src/finance.js";
+import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, filterTransactions, roastTransaction } from "../src/finance.js";
+import { setCurrency } from "../src/utils.js";
 
 const state = {
   asset: { initialBalance: 1500 },
@@ -41,5 +42,27 @@ test("filters using type and free text", () => {
     month: "2026-10"
   });
   assert.deepEqual(result.map(({ id }) => id), ["2"]);
+});
+
+test("roasts unusually expensive JPY purchases after saving", () => {
+  setCurrency("JPY");
+  assert.equal(roastTransaction({ type: "outcome", amount: 10_000, categoryId: "food" }, state),
+    "¥10,000 FOR FOOD?! BRO, DID YOU EAT THE RESTAURANT? 💀");
+  assert.equal(roastTransaction({ type: "outcome", amount: 9_999, categoryId: "food" }, state), null);
+  assert.equal(roastTransaction({ type: "outcome", amount: 30_000, categoryId: "unknown" }, state),
+    "YOUR WALLET JUST FILED A MISSING PERSON REPORT. 😭");
+});
+
+test("does not roast income, non-JPY spending, health, or debt payments", () => {
+  const sensitiveState = {
+    categories: [{ id: "health", name: "Health" }, { id: "debt", name: "Debt Payment" }]
+  };
+  setCurrency("JPY");
+  assert.equal(roastTransaction({ type: "income", amount: 30_000, categoryId: "food" }, state), null);
+  assert.equal(roastTransaction({ type: "outcome", amount: 100_000, categoryId: "health" }, sensitiveState), null);
+  assert.equal(roastTransaction({ type: "outcome", amount: 100_000, categoryId: "debt" }, sensitiveState), null);
+  setCurrency("USD");
+  assert.equal(roastTransaction({ type: "outcome", amount: 30_000, categoryId: "food" }, state), null);
+  setCurrency("JPY");
 });
 

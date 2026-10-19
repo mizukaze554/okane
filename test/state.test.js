@@ -80,6 +80,33 @@ test("keeps and restores local recovery snapshots", () => {
   assert.equal(store.restoreSnapshot(snapshots[0].id).asset.initialBalance, 100);
 });
 
+test("notifies another page when shared local data changes", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const listeners = new Set();
+  const eventTarget = {
+    addEventListener: (type, listener) => { if (type === "storage") listeners.add(listener); },
+    removeEventListener: (type, listener) => { if (type === "storage") listeners.delete(listener); }
+  };
+  const store = new StateStore(storage);
+  const saved = sanitizeState({ categories: [], asset: { initialBalance: 125 }, transactions: [] });
+  store.save(saved);
+
+  let received = null;
+  const unsubscribe = store.subscribe((nextState) => { received = nextState; }, eventTarget);
+  listeners.forEach((listener) => listener({ key: "unrelated", storageArea: storage }));
+  assert.equal(received, null);
+  listeners.forEach((listener) => listener({ key: "minimalFinanceControlState", storageArea: storage }));
+  assert.equal(received.asset.initialBalance, 125);
+
+  unsubscribe();
+  assert.equal(listeners.size, 0);
+});
+
 test("sanitizes asset balance history", () => {
   const state = sanitizeState({
     categories: [], asset: { initialBalance: 20, history: [{ id: "h", previousBalance: 0, newBalance: 20, note: "First count" }] }, transactions: []

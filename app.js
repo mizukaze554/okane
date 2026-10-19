@@ -1,7 +1,7 @@
 import { buildAnalytics, buildMonthlyTrend } from "./src/analytics.js";
 import { createTransportTransaction, generateDueRecurring, transportTotal } from "./src/automation.js";
 import { APP_VERSION, CURRENCY_DETECTION_URL, LAST_EXPORT_KEY, THEME_KEY, VIEW_TITLES } from "./src/config.js";
-import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
+import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, categorySpending, filterTransactions, roastTransaction, sortTransactions } from "./src/finance.js";
 import { emptyState, transactionCard } from "./src/render.js";
 import { createDefaultState, sanitizeState, StateStore, validateImport } from "./src/state.js";
 import { capitalize, createId, escapeHtml, formatMoney, getCurrency, isValidCurrency, isValidDate, normalizeMoney, setCurrency, todayString } from "./src/utils.js";
@@ -100,6 +100,11 @@ function bindEvents() {
   });
   window.addEventListener("online", updateNetworkStatus);
   window.addEventListener("offline", updateNetworkStatus);
+  store.subscribe(syncStateFromStorage, window);
+  window.addEventListener("storage", syncPreferencesFromStorage);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncStateFromStorage(store.load());
+  });
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     installPromptEvent = event;
@@ -110,6 +115,20 @@ function bindEvents() {
     els.installCard.hidden = true;
     showToast("Okane installed.");
   });
+}
+
+function syncStateFromStorage(nextState) {
+  if (JSON.stringify(nextState) === JSON.stringify(state)) return;
+  state = nextState;
+  if (editingTransactionId) resetTransactionForm();
+  renderAll();
+  showToast("Updated with changes from another tab.");
+}
+
+function syncPreferencesFromStorage(event) {
+  if (event.key !== THEME_KEY && event.key !== null) return;
+  applyStoredTheme();
+  renderThemeControls();
 }
 
 function commit(message) {
@@ -144,7 +163,7 @@ function saveTransaction(event) {
   };
   if (existing) state.transactions[state.transactions.indexOf(existing)] = transaction;
   else state.transactions.unshift(transaction);
-  const message = existing ? "Transaction updated." : "Transaction saved.";
+  const message = roastTransaction(transaction, state) || (existing ? "Transaction updated." : "Transaction saved.");
   resetTransactionForm();
   commit(message);
 }
@@ -1094,7 +1113,8 @@ function showToast(message, actionLabel = "", action = null) {
   els.toastAction.onclick = action;
   els.toast.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => els.toast.classList.remove("show"), action ? 6000 : 2800);
+  const duration = action ? 6000 : message.length > 60 ? 5000 : 2800;
+  toastTimer = setTimeout(() => els.toast.classList.remove("show"), duration);
 }
 function updateNetworkStatus() {
   els.networkStatus.textContent = "Saved on this device";

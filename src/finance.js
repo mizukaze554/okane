@@ -1,4 +1,24 @@
-import { todayString } from "./utils.js";
+import { getCurrency, todayString } from "./utils.js";
+
+const EXPENSE_ROASTS = Object.freeze({
+  food: { amount: 10_000, message: "¥10,000 FOR FOOD?! BRO, DID YOU EAT THE RESTAURANT? 💀" },
+  transport: { amount: 15_000, message: "¥15,000 ON TRANSPORT?! DID THE TRAIN TAKE YOU TO MARS? 🚀" },
+  shopping: { amount: 20_000, message: "THAT SHOPPING BAG BETTER HAVE A RETIREMENT PLAN. 🛍️😭" },
+  entertainment: { amount: 15_000, message: "¥15,000 FOR ENTERTAINMENT?! YOUR BUDGET WAS NOT AMUSED. 🎭" },
+  bills: { amount: 30_000, message: "THAT BILL DIDN'T ARRIVE—IT KICKED THE DOOR DOWN. 💸" }
+});
+
+export function roastTransaction(transaction, state) {
+  if (transaction.type !== "outcome" || getCurrency() !== "JPY") return null;
+
+  const category = state.categories.find(({ id }) => id === transaction.categoryId)?.name.trim().toLowerCase();
+  if (["health", "debt payment"].includes(category)) return null;
+
+  const roast = EXPENSE_ROASTS[category];
+  if (roast && transaction.amount >= roast.amount) return roast.message;
+  if (transaction.amount >= 30_000) return "YOUR WALLET JUST FILED A MISSING PERSON REPORT. 😭";
+  return null;
+}
 
 export function calculateTotals(state, currentDate = todayString()) {
   const currentMonth = currentDate.slice(0, 7);
