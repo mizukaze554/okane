@@ -1,4 +1,4 @@
-const CACHE_NAME = "okane-v5";
+const CACHE_NAME = "okane-v6";
 const ASSETS = [
   "./",
   "./index.html",

@@ -2,7 +2,7 @@
 
 Okane is a clean, offline-first personal finance control app built with only HTML, CSS, and vanilla JavaScript. It works as a single page app and installable PWA with all finance data stored locally in the browser.
 
-Developed by [Deltashift](https://deltashift.netlify.app/) and [mizukaze554](https://github.com/mizukaze554).
+Developed by [Nerdhook](https://nerdhook.site/), a software development organization on [GitHub](https://github.com/Nerdhook).
 
 ## Features
 
