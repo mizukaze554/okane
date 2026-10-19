@@ -1,9 +1,14 @@
-const CACHE_NAME = "okane-v4";
+const CACHE_NAME = "okane-v5";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./src/config.js",
+  "./src/finance.js",
+  "./src/render.js",
+  "./src/state.js",
+  "./src/utils.js",
   "./manifest.json",
   "./icon.svg",
   "./icon-192.svg",

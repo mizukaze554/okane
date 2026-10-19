@@ -373,7 +373,7 @@ h3 {
   color: var(--black);
 }
 
-.access-progress {
+.account-progress {
   grid-column: 1 / -1;
   height: 4px;
   overflow: hidden;
@@ -381,7 +381,7 @@ h3 {
   background: var(--bg);
 }
 
-.access-progress span {
+.account-progress span {
   display: block;
   height: 100%;
   width: var(--progress, 0%);

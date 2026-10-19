@@ -1,24 +1,15 @@
-"use strict";
+import { APP_VERSION, THEME_KEY, VIEW_TITLES } from "./src/config.js";
+import { calculateAccountSummaries, calculateTotals, filterTransactions, sortTransactions } from "./src/finance.js";
+import { accountManagementRow, accountSummaryCard, emptyState, transactionCard } from "./src/render.js";
+import { createDefaultState, sanitizeState, StateStore, validateImport } from "./src/state.js";
+import { capitalize, createId, escapeHtml, formatMoney, isValidDate, todayString } from "./src/utils.js";
 
-const STORAGE_KEY = "minimalFinanceControlState";
-const THEME_KEY = "okaneThemePreference";
-const APP_VERSION = "1.0.0";
-const CURRENCY = "JPY";
+const store = new StateStore();
+let state = store.load();
+let toastTimer = null;
+const els = {};
 
 applyStoredTheme();
-
-let state = loadState();
-let toastTimer = null;
-
-installZoomLock();
-
-const money = new Intl.NumberFormat("ja-JP", {
-  style: "currency",
-  currency: CURRENCY,
-  maximumFractionDigits: 0
-});
-
-const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
@@ -29,93 +20,39 @@ document.addEventListener("DOMContentLoaded", () => {
   registerServiceWorker();
 });
 
-function installZoomLock() {
-  const preventDefault = (event) => event.preventDefault();
-
-  window.addEventListener("wheel", (event) => {
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-    }
-  }, { passive: false });
-
-  window.addEventListener("keydown", (event) => {
-    if (!(event.ctrlKey || event.metaKey)) return;
-    if (["+", "=", "-", "_", "0"].includes(event.key)) {
-      event.preventDefault();
-    }
-  });
-
-  window.addEventListener("touchmove", (event) => {
-    if (event.touches.length > 1) {
-      event.preventDefault();
-    }
-  }, { passive: false });
-
-  window.addEventListener("gesturestart", preventDefault, { passive: false });
-  window.addEventListener("gesturechange", preventDefault, { passive: false });
-  window.addEventListener("gestureend", preventDefault, { passive: false });
-}
-
 function cacheElements() {
   [
     "viewTitle", "networkStatus", "totalBalance", "totalIncome", "totalOutcome",
-    "transactionCount", "monthIncome", "monthOutcome", "dashboardAccessSummary",
+    "transactionCount", "monthIncome", "monthOutcome", "dashboardAccountSummary",
     "dashboardRecentTransactions", "quickAddButton", "incomeBar", "outcomeBar", "incomeBarValue", "outcomeBarValue",
-    "transactionForm", "transactionAmount", "transactionCategory", "transactionAccess",
+    "transactionForm", "transactionAmount", "transactionCategory", "transactionAccount",
     "transactionNote", "transactionDate", "transactionList", "categoryForm",
-    "categoryName", "categoryType", "categoryList", "accessForm", "accessName",
-    "accessInitialBalance", "accessList", "searchInput", "filterType",
-    "filterCategory", "filterAccess", "filterMonth", "clearFilters",
+    "categoryName", "categoryType", "categoryList", "accountForm", "accountName",
+    "accountInitialBalance", "accountList", "searchInput", "filterType",
+    "filterCategory", "filterAccount", "filterMonth", "clearFilters",
     "exportButton", "importFile", "resetButton", "backupStatus", "toast"
-  ].forEach((id) => {
-    els[id] = document.getElementById(id);
-  });
+  ].forEach((id) => { els[id] = document.getElementById(id); });
 }
 
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.view));
   });
-
   document.querySelectorAll("[data-theme-choice]").forEach((button) => {
     button.addEventListener("click", () => setThemePreference(button.dataset.themeChoice));
   });
-
   els.quickAddButton.addEventListener("click", () => showView("add"));
-
-  els.transactionForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    addTransaction();
-  });
-
+  els.transactionForm.addEventListener("submit", addTransaction);
   document.querySelectorAll("input[name='transactionType']").forEach((input) => {
     input.addEventListener("change", renderTransactionCategoryOptions);
   });
-
-  els.categoryForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    addCategory();
-  });
-
-  els.accessForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    addAccess();
-  });
-
-  [els.searchInput, els.filterType, els.filterCategory, els.filterAccess, els.filterMonth].forEach((input) => {
+  els.categoryForm.addEventListener("submit", addCategory);
+  els.accountForm.addEventListener("submit", addAccount);
+  [els.searchInput, els.filterType, els.filterCategory, els.filterAccount, els.filterMonth].forEach((input) => {
     input.addEventListener("input", renderTransactions);
     input.addEventListener("change", renderTransactions);
   });
-
-  els.clearFilters.addEventListener("click", () => {
-    els.searchInput.value = "";
-    els.filterType.value = "all";
-    els.filterCategory.value = "all";
-    els.filterAccess.value = "all";
-    els.filterMonth.value = "";
-    renderTransactions();
-  });
-
+  els.clearFilters.addEventListener("click", clearFilters);
   els.exportButton.addEventListener("click", exportData);
   els.importFile.addEventListener("change", importData);
   els.resetButton.addEventListener("click", resetData);
@@ -123,295 +60,200 @@ function bindEvents() {
   window.addEventListener("offline", updateNetworkStatus);
 }
 
-function applyStoredTheme() {
-  const theme = localStorage.getItem(THEME_KEY) || "auto";
-  applyTheme(theme);
+function commit(message) {
+  store.save(state);
+  renderAll();
+  showToast(message);
 }
 
-function setThemePreference(theme) {
-  if (!["auto", "light", "dark"].includes(theme)) return;
-  localStorage.setItem(THEME_KEY, theme);
-  applyTheme(theme);
-  renderThemeControls();
-  showToast(theme === "auto" ? "Theme follows system." : `${capitalize(theme)} theme saved.`);
-}
-
-function applyTheme(theme) {
-  if (theme === "auto") {
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    document.documentElement.dataset.theme = theme;
-  }
-}
-
-function renderThemeControls() {
-  const theme = localStorage.getItem(THEME_KEY) || "auto";
-  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.themeChoice === theme);
-  });
-}
-
-function loadState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      return initializeDefaultData();
-    }
-
-    const parsed = JSON.parse(saved);
-    return sanitizeState(parsed);
-  } catch (error) {
-    console.error(error);
-    return initializeDefaultData();
-  }
-}
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function initializeDefaultData() {
-  const now = new Date().toISOString();
-  const income = ["Salary", "Gift", "Bonus", "Other Income"].map((name) => ({
-    id: createId(),
-    name,
-    type: "income",
-    createdAt: now
-  }));
-  const outcome = ["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Other Outcome"].map((name) => ({
-    id: createId(),
-    name,
-    type: "outcome",
-    createdAt: now
-  }));
-  const accesses = ["Cash", "Bank", "PayPay"].map((name) => ({
-    id: createId(),
-    name,
-    initialBalance: 0,
-    createdAt: now
-  }));
-
-  return {
-    version: APP_VERSION,
-    categories: [...income, ...outcome],
-    accesses,
-    transactions: []
-  };
-}
-
-function sanitizeState(input) {
-  const clean = {
-    version: typeof input?.version === "string" ? input.version : APP_VERSION,
-    categories: Array.isArray(input?.categories) ? input.categories : [],
-    accesses: Array.isArray(input?.accesses) ? input.accesses : [],
-    transactions: Array.isArray(input?.transactions) ? input.transactions : []
-  };
-
-  clean.categories = clean.categories
-    .filter((item) => item && item.id && item.name)
-    .map((item) => ({
-      id: String(item.id),
-      name: String(item.name),
-      type: ["income", "outcome", "both"].includes(item.type) ? item.type : "both",
-      createdAt: item.createdAt || new Date().toISOString()
-    }));
-
-  clean.accesses = clean.accesses
-    .filter((item) => item && item.id && item.name)
-    .map((item) => ({
-      id: String(item.id),
-      name: String(item.name),
-      initialBalance: Number(item.initialBalance) || 0,
-      createdAt: item.createdAt || new Date().toISOString()
-    }));
-
-  clean.transactions = clean.transactions
-    .filter((item) => item && item.id && item.type && Number(item.amount) > 0)
-    .map((item) => ({
-      id: String(item.id),
-      type: item.type === "income" ? "income" : "outcome",
-      amount: Number(item.amount),
-      categoryId: item.categoryId ? String(item.categoryId) : "",
-      accessId: item.accessId ? String(item.accessId) : "",
-      note: item.note ? String(item.note) : "",
-      date: isValidDate(item.date) ? item.date : todayString(),
-      createdAt: item.createdAt || new Date().toISOString()
-    }));
-
-  if (!clean.categories.length || !clean.accesses.length) {
-    const defaults = initializeDefaultData();
-    clean.categories = clean.categories.length ? clean.categories : defaults.categories;
-    clean.accesses = clean.accesses.length ? clean.accesses : defaults.accesses;
-  }
-
-  return clean;
-}
-
-function addTransaction() {
-  const type = getTransactionType();
+function addTransaction(event) {
+  event.preventDefault();
+  const type = document.querySelector("input[name='transactionType']:checked").value;
   const amount = Number(els.transactionAmount.value);
   const categoryId = els.transactionCategory.value;
-  const accessId = els.transactionAccess.value;
-  const note = els.transactionNote.value.trim();
+  const accountId = els.transactionAccount.value;
   const date = els.transactionDate.value;
 
-  if (!amount || amount <= 0) return showToast("Amount must be greater than 0.");
-  if (!categoryId) return showToast("Category is required.");
-  if (!accessId) return showToast("Access is required.");
-  if (!isValidDate(date)) return showToast("Date is required.");
+  if (!Number.isFinite(amount) || amount <= 0) return showToast("Amount must be greater than 0.");
+  if (!state.categories.some(({ id }) => id === categoryId)) return showToast("Category is required.");
+  if (!state.accounts.some(({ id }) => id === accountId)) return showToast("Account is required.");
+  if (!isValidDate(date)) return showToast("Enter a valid date.");
 
   state.transactions.unshift({
-    id: createId(),
-    type,
-    amount,
-    categoryId,
-    accessId,
-    note,
-    date,
-    createdAt: new Date().toISOString()
+    id: createId(), type, amount, categoryId, accountId,
+    note: els.transactionNote.value.trim(), date, createdAt: new Date().toISOString()
   });
-
-  saveState();
-  const selectedType = type;
   els.transactionAmount.value = "";
   els.transactionNote.value = "";
-  document.querySelector(`input[name='transactionType'][value='${selectedType}']`).checked = true;
-  els.transactionAccess.value = accessId;
   setDefaultDate();
-  renderAll();
-  els.transactionAccess.value = accessId;
-  showToast("Transaction saved.");
+  commit("Transaction saved.");
+  els.transactionAccount.value = accountId;
 }
 
 function deleteTransaction(id) {
-  state.transactions = state.transactions.filter((transaction) => transaction.id !== id);
-  saveState();
-  renderAll();
-  showToast("Transaction deleted.");
+  state.transactions = state.transactions.filter((item) => item.id !== id);
+  commit("Transaction deleted.");
 }
 
-function addCategory() {
+function addCategory(event) {
+  event.preventDefault();
   const name = els.categoryName.value.trim();
   const type = els.categoryType.value;
-
   if (!name) return showToast("Category name cannot be empty.");
-  if (state.categories.some((category) => category.name.toLowerCase() === name.toLowerCase() && category.type === type)) {
+  if (state.categories.some((item) => item.name.toLowerCase() === name.toLowerCase() && item.type === type)) {
     return showToast("That category already exists for this type.");
   }
-
-  state.categories.push({
-    id: createId(),
-    name,
-    type,
-    createdAt: new Date().toISOString()
-  });
-
-  saveState();
+  state.categories.push({ id: createId(), name, type, createdAt: new Date().toISOString() });
   els.categoryForm.reset();
-  renderAll();
-  showToast("Category added.");
+  commit("Category added.");
 }
 
 function deleteCategory(id) {
-  const used = state.transactions.some((transaction) => transaction.categoryId === id);
-  if (used && !confirm("This category is used by transactions. Delete it anyway? Old transactions will show Deleted category.")) {
-    return;
+  if (state.transactions.some((item) => item.categoryId === id)) {
+    return showToast("Category is in use and cannot be deleted.");
   }
-
-  state.categories = state.categories.filter((category) => category.id !== id);
-  saveState();
-  renderAll();
-  showToast("Category deleted.");
+  state.categories = state.categories.filter((item) => item.id !== id);
+  commit("Category deleted.");
 }
 
-function addAccess() {
-  const name = els.accessName.value.trim();
-  const initialBalance = Number(els.accessInitialBalance.value) || 0;
-
-  if (!name) return showToast("Access name cannot be empty.");
-  if (state.accesses.some((access) => access.name.toLowerCase() === name.toLowerCase())) {
-    return showToast("That access already exists.");
+function addAccount(event) {
+  event.preventDefault();
+  const name = els.accountName.value.trim();
+  const initialBalance = Number(els.accountInitialBalance.value);
+  if (!name) return showToast("Account name cannot be empty.");
+  if (!Number.isFinite(initialBalance)) return showToast("Enter a valid initial balance.");
+  if (state.accounts.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+    return showToast("That account already exists.");
   }
-
-  state.accesses.push({
-    id: createId(),
-    name,
-    initialBalance,
-    createdAt: new Date().toISOString()
-  });
-
-  saveState();
-  els.accessForm.reset();
-  els.accessInitialBalance.value = "0";
-  renderAll();
-  showToast("Access added.");
+  state.accounts.push({ id: createId(), name, initialBalance, createdAt: new Date().toISOString() });
+  els.accountForm.reset();
+  els.accountInitialBalance.value = "0";
+  commit("Account added.");
 }
 
-function deleteAccess(id) {
-  const used = state.transactions.some((transaction) => transaction.accessId === id);
-  if (used && !confirm("This access is used by transactions. Delete it anyway? Old transactions will show Deleted access.")) {
-    return;
+function deleteAccount(id) {
+  if (state.transactions.some((item) => item.accountId === id)) {
+    return showToast("Account is in use and cannot be deleted.");
   }
-
-  state.accesses = state.accesses.filter((access) => access.id !== id);
-  saveState();
-  renderAll();
-  showToast("Access deleted.");
+  state.accounts = state.accounts.filter((item) => item.id !== id);
+  commit("Account deleted.");
 }
 
-function calculateTotals() {
-  const currentMonth = todayString().slice(0, 7);
-  return state.transactions.reduce((totals, transaction) => {
-    const isIncome = transaction.type === "income";
-    const isCurrentMonth = transaction.date.slice(0, 7) === currentMonth;
+function clearFilters() {
+  els.searchInput.value = "";
+  els.filterType.value = "all";
+  els.filterCategory.value = "all";
+  els.filterAccount.value = "all";
+  els.filterMonth.value = "";
+  renderTransactions();
+}
 
-    totals.totalIncome += isIncome ? transaction.amount : 0;
-    totals.totalOutcome += isIncome ? 0 : transaction.amount;
-    totals.monthIncome += isIncome && isCurrentMonth ? transaction.amount : 0;
-    totals.monthOutcome += !isIncome && isCurrentMonth ? transaction.amount : 0;
-    totals.transactionCount += 1;
-    return totals;
-  }, {
-    totalIncome: 0,
-    totalOutcome: 0,
-    monthIncome: 0,
-    monthOutcome: 0,
-    transactionCount: 0,
-    totalBalance: state.accesses.reduce((sum, access) => sum + (Number(access.initialBalance) || 0), 0)
+function renderAll() {
+  renderThemeControls();
+  renderDashboard();
+  renderTransactionCategoryOptions();
+  renderAccountOptions();
+  renderFilterOptions();
+  renderTransactions();
+  renderCategories();
+  renderAccounts();
+}
+
+function renderDashboard() {
+  const totals = calculateTotals(state);
+  const accounts = calculateAccountSummaries(state);
+  els.totalBalance.textContent = formatMoney(accounts.reduce((sum, item) => sum + item.currentBalance, 0));
+  els.totalIncome.textContent = formatMoney(totals.totalIncome);
+  els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
+  els.transactionCount.textContent = String(totals.transactionCount);
+  els.monthIncome.textContent = formatMoney(totals.monthIncome);
+  els.monthOutcome.textContent = formatMoney(totals.monthOutcome);
+  els.incomeBarValue.textContent = formatMoney(totals.monthIncome);
+  els.outcomeBarValue.textContent = formatMoney(totals.monthOutcome);
+  const maxMonthly = Math.max(totals.monthIncome, totals.monthOutcome, 1);
+  els.incomeBar.style.width = `${totals.monthIncome / maxMonthly * 100}%`;
+  els.outcomeBar.style.width = `${totals.monthOutcome / maxMonthly * 100}%`;
+  els.dashboardAccountSummary.innerHTML = accounts.length
+    ? accounts.map(accountSummaryCard).join("")
+    : emptyState("No accounts yet", "Add an account to start tracking balances.");
+
+  const recent = sortTransactions(state.transactions).slice(0, 5);
+  els.dashboardRecentTransactions.innerHTML = recent.length
+    ? recent.map((item) => transactionCard(item, state)).join("")
+    : emptyState("No transactions yet", "Add your first income or outcome.");
+  bindDeleteButtons(els.dashboardRecentTransactions, "transaction");
+}
+
+function renderTransactions() {
+  const transactions = filterTransactions(state, {
+    search: els.searchInput.value, type: els.filterType.value,
+    categoryId: els.filterCategory.value, accountId: els.filterAccount.value,
+    month: els.filterMonth.value
+  });
+  els.transactionList.innerHTML = transactions.length
+    ? transactions.map((item) => transactionCard(item, state)).join("")
+    : emptyState("No matching transactions", "Try changing the filters or add a transaction.");
+  bindDeleteButtons(els.transactionList, "transaction");
+}
+
+function renderCategories() {
+  els.categoryList.innerHTML = state.categories.length ? state.categories.map((category) => `
+    <article class="finance-row">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(category.name)} <span class="pill">${category.type}</span></p>
+        <p class="row-sub">${state.transactions.filter((item) => item.categoryId === category.id).length} transactions</p>
+      </div>
+      <button class="delete-link" type="button" data-delete-category="${escapeHtml(category.id)}">Delete</button>
+    </article>`).join("") : emptyState("No categories yet", "Add an income or outcome category.");
+  bindDeleteButtons(els.categoryList, "category");
+}
+
+function renderAccounts() {
+  const accounts = calculateAccountSummaries(state);
+  els.accountList.innerHTML = accounts.length ? accounts.map((account) => accountManagementRow(
+    account, state.transactions.filter((item) => item.accountId === account.id).length
+  )).join("") : emptyState("No accounts yet", "Add cash, a bank, card, or wallet.");
+  bindDeleteButtons(els.accountList, "account");
+}
+
+function bindDeleteButtons(container, type) {
+  const actions = { transaction: deleteTransaction, category: deleteCategory, account: deleteAccount };
+  container.querySelectorAll(`[data-delete-${type}]`).forEach((button) => {
+    button.addEventListener("click", () => actions[type](button.dataset[`delete${capitalize(type)}`]));
   });
 }
 
-function calculateAccessSummaries() {
-  return state.accesses.map((access) => {
-    const accessTransactions = state.transactions.filter((transaction) => transaction.accessId === access.id);
-    const totalIncome = accessTransactions
-      .filter((transaction) => transaction.type === "income")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const totalOutcome = accessTransactions
-      .filter((transaction) => transaction.type === "outcome")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const initialBalance = Number(access.initialBalance) || 0;
+function renderTransactionCategoryOptions() {
+  const selected = els.transactionCategory.value;
+  const type = document.querySelector("input[name='transactionType']:checked").value;
+  const categories = state.categories.filter((item) => item.type === type || item.type === "both");
+  els.transactionCategory.innerHTML = `<option value="">Choose category</option>${categories.map((item) =>
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}`;
+  if (categories.some(({ id }) => id === selected)) els.transactionCategory.value = selected;
+}
 
-    return {
-      ...access,
-      initialBalance,
-      totalIncome,
-      totalOutcome,
-      currentBalance: initialBalance + totalIncome - totalOutcome
-    };
-  });
+function renderAccountOptions() {
+  const selected = els.transactionAccount.value;
+  els.transactionAccount.innerHTML = `<option value="">Choose account</option>${state.accounts.map((item) =>
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}`;
+  if (state.accounts.some(({ id }) => id === selected)) els.transactionAccount.value = selected;
+}
+
+function renderFilterOptions() {
+  const selectedCategory = els.filterCategory.value || "all";
+  const selectedAccount = els.filterAccount.value || "all";
+  els.filterCategory.innerHTML = `<option value="all">All categories</option>${state.categories.map((item) =>
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}`;
+  els.filterAccount.innerHTML = `<option value="all">All accounts</option>${state.accounts.map((item) =>
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}`;
+  els.filterCategory.value = state.categories.some(({ id }) => id === selectedCategory) ? selectedCategory : "all";
+  els.filterAccount.value = state.accounts.some(({ id }) => id === selectedAccount) ? selectedAccount : "all";
 }
 
 function exportData() {
-  const payload = {
-    ...state,
-    version: APP_VERSION,
-    exportedAt: new Date().toISOString()
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const payload = { ...state, version: APP_VERSION, exportedAt: new Date().toISOString() };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
   const link = document.createElement("a");
-
   link.href = url;
   link.download = `okane-${todayString()}.json`;
   link.click();
@@ -423,23 +265,15 @@ function exportData() {
 function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result);
       validateImport(parsed);
-      if (!confirm("Importing will replace all current local data. Continue?")) {
-        event.target.value = "";
-        return;
-      }
-
+      if (!confirm("Importing will replace all current local data. Continue?")) return;
       state = sanitizeState(parsed);
-      state.version = APP_VERSION;
-      saveState();
-      renderAll();
+      commit("Import complete.");
       setBackupStatus("Imported data successfully.");
-      showToast("Import complete.");
     } catch (error) {
       setBackupStatus(`Import failed: ${error.message}`);
       showToast("Import failed.");
@@ -451,308 +285,56 @@ function importData(event) {
 }
 
 function resetData() {
-  const message = "Type RESET to permanently clear all local finance data.";
-  if (prompt(message) !== "RESET") {
-    return;
-  }
-
-  state = initializeDefaultData();
-  saveState();
+  if (prompt("Type RESET to permanently clear all local finance data.") !== "RESET") return;
+  state = createDefaultState();
   setDefaultDate();
-  renderAll();
+  commit("Data reset.");
   setBackupStatus("All data reset and defaults restored.");
-  showToast("Data reset.");
-}
-
-function validateImport(data) {
-  if (!data || typeof data !== "object") throw new Error("File must contain a JSON object.");
-  if (!Array.isArray(data.categories)) throw new Error("categories must be an array.");
-  if (!Array.isArray(data.accesses)) throw new Error("accesses must be an array.");
-  if (!Array.isArray(data.transactions)) throw new Error("transactions must be an array.");
-}
-
-function renderAll() {
-  renderThemeControls();
-  renderDashboard();
-  renderTransactionCategoryOptions();
-  renderAccessOptions();
-  renderFilterOptions();
-  renderTransactions();
-  renderCategories();
-  renderAccesses();
-}
-
-function renderDashboard() {
-  const totals = calculateTotals();
-  const accessSummaries = calculateAccessSummaries();
-  const realTotalBalance = accessSummaries.reduce((sum, access) => sum + access.currentBalance, 0);
-
-  els.totalBalance.textContent = formatMoney(realTotalBalance);
-  if (els.totalIncome) els.totalIncome.textContent = formatMoney(totals.totalIncome);
-  if (els.totalOutcome) els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
-  if (els.transactionCount) els.transactionCount.textContent = String(totals.transactionCount);
-  els.monthIncome.textContent = formatMoney(totals.monthIncome);
-  els.monthOutcome.textContent = formatMoney(totals.monthOutcome);
-  if (els.incomeBarValue) els.incomeBarValue.textContent = formatMoney(totals.monthIncome);
-  if (els.outcomeBarValue) els.outcomeBarValue.textContent = formatMoney(totals.monthOutcome);
-
-  const maxMonthly = Math.max(totals.monthIncome, totals.monthOutcome, 1);
-  if (els.incomeBar) els.incomeBar.style.width = `${(totals.monthIncome / maxMonthly) * 100}%`;
-  if (els.outcomeBar) els.outcomeBar.style.width = `${(totals.monthOutcome / maxMonthly) * 100}%`;
-
-  els.dashboardAccessSummary.innerHTML = accessSummaries.length
-    ? accessSummaries.map(renderAccessSummaryCard).join("")
-    : `<div class="empty"><strong>No access yet</strong>Add an access source to start tracking balances.</div>`;
-
-  renderDashboardRecentTransactions();
-}
-
-function renderTransactions() {
-  const transactions = getFilteredTransactions();
-
-  els.transactionList.innerHTML = transactions.length
-    ? transactions.map(renderTransactionCard).join("")
-    : `<div class="empty"><strong>No transactions yet</strong>Add your first income or outcome.</div>`;
-
-  els.transactionList.querySelectorAll("[data-delete-transaction]").forEach((button) => {
-    button.addEventListener("click", () => deleteTransaction(button.dataset.deleteTransaction));
-  });
-}
-
-function renderDashboardRecentTransactions() {
-  const recent = getSortedTransactions().slice(0, 5);
-
-  els.dashboardRecentTransactions.innerHTML = recent.length
-    ? recent.map(renderTransactionCard).join("")
-    : `<div class="empty"><strong>No transactions yet</strong>Add your first income or outcome.</div>`;
-
-  els.dashboardRecentTransactions.querySelectorAll("[data-delete-transaction]").forEach((button) => {
-    button.addEventListener("click", () => deleteTransaction(button.dataset.deleteTransaction));
-  });
-}
-
-function renderCategories() {
-  els.categoryList.innerHTML = state.categories.length
-    ? state.categories.map((category) => `
-        <article class="finance-row">
-          <div class="row-main">
-            <p class="row-title">${escapeHtml(category.name)} <span class="pill">${category.type}</span></p>
-            <p class="row-sub">${countCategoryTransactions(category.id)} transactions</p>
-          </div>
-          <button class="delete-link" type="button" data-delete-category="${category.id}">Delete</button>
-        </article>
-      `).join("")
-    : `<div class="empty"><strong>No categories yet</strong>Add a category for income or outcome.</div>`;
-
-  els.categoryList.querySelectorAll("[data-delete-category]").forEach((button) => {
-    button.addEventListener("click", () => deleteCategory(button.dataset.deleteCategory));
-  });
-}
-
-function renderAccesses() {
-  const summaries = calculateAccessSummaries();
-  els.accessList.innerHTML = summaries.length
-    ? summaries.map((access) => renderAccessManagementRow(access)).join("")
-    : `<div class="empty"><strong>No access sources yet</strong>Add cash, bank, card, or wallet.</div>`;
-
-  els.accessList.querySelectorAll("[data-delete-access]").forEach((button) => {
-    button.addEventListener("click", () => deleteAccess(button.dataset.deleteAccess));
-  });
-}
-
-function renderTransactionCategoryOptions() {
-  const type = getTransactionType();
-  const categories = state.categories.filter((category) => category.type === type || category.type === "both");
-
-  els.transactionCategory.innerHTML = `<option value="">Choose category</option>${categories
-    .map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`)
-    .join("")}`;
-}
-
-function renderAccessOptions() {
-  els.transactionAccess.innerHTML = `<option value="">Choose access</option>${state.accesses
-    .map((access) => `<option value="${access.id}">${escapeHtml(access.name)}</option>`)
-    .join("")}`;
-}
-
-function renderFilterOptions() {
-  els.filterCategory.innerHTML = `<option value="all">All categories</option>${state.categories
-    .map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`)
-    .join("")}`;
-  els.filterAccess.innerHTML = `<option value="all">All access</option>${state.accesses
-    .map((access) => `<option value="${access.id}">${escapeHtml(access.name)}</option>`)
-    .join("")}`;
-}
-
-function renderTransactionCard(transaction) {
-  const category = state.categories.find((item) => item.id === transaction.categoryId);
-  const access = state.accesses.find((item) => item.id === transaction.accessId);
-  const sign = transaction.type === "income" ? "+" : "-";
-
-  return `
-    <article class="finance-row">
-      <div class="row-main">
-        <p class="row-title">${escapeHtml(category?.name || "Deleted category")}</p>
-        <p class="row-sub">${transaction.note ? escapeHtml(transaction.note) : escapeHtml(access?.name || "Deleted access")}</p>
-        <p class="row-detail">${formatDate(transaction.date)} · ${escapeHtml(access?.name || "Deleted access")}</p>
-      </div>
-      <div class="row-side">
-        <div class="amount ${transaction.type}">${sign}${formatMoney(transaction.amount)}</div>
-        <span class="pill ${transaction.type}">${transaction.type}</span>
-        <button class="delete-link" type="button" data-delete-transaction="${transaction.id}" aria-label="Delete transaction">Delete</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderAccessSummaryCard(access) {
-  const max = Math.max(access.totalIncome, access.totalOutcome, Math.abs(access.currentBalance), 1);
-  const progress = Math.min(100, Math.max(8, (Math.abs(access.currentBalance) / max) * 100));
-
-  return `
-    <article class="finance-row">
-      <div class="row-main">
-        <p class="row-title">${escapeHtml(access.name)}</p>
-        <p class="row-sub">Initial ${formatMoney(access.initialBalance)} · In ${formatMoney(access.totalIncome)} · Out ${formatMoney(access.totalOutcome)}</p>
-      </div>
-      <div class="row-side">
-        <div class="amount">${formatMoney(access.currentBalance)}</div>
-      </div>
-      <div class="access-progress" aria-hidden="true" style="--progress: ${progress}%"><span></span></div>
-    </article>
-  `;
-}
-
-function renderAccessManagementRow(access) {
-  return `
-    ${renderAccessSummaryCard(access).replace("</article>", `
-      <button class="delete-link" type="button" data-delete-access="${access.id}">Delete</button>
-      <p class="row-detail">${countAccessTransactions(access.id)} transactions</p>
-    </article>`)}
-  `;
-}
-
-function getFilteredTransactions() {
-  const search = els.searchInput.value.trim().toLowerCase();
-  const type = els.filterType.value;
-  const categoryId = els.filterCategory.value;
-  const accessId = els.filterAccess.value;
-  const month = els.filterMonth.value;
-
-  return getSortedTransactions()
-    .filter((transaction) => type === "all" || transaction.type === type)
-    .filter((transaction) => categoryId === "all" || transaction.categoryId === categoryId)
-    .filter((transaction) => accessId === "all" || transaction.accessId === accessId)
-    .filter((transaction) => !month || transaction.date.slice(0, 7) === month)
-    .filter((transaction) => {
-      if (!search) return true;
-      const category = state.categories.find((item) => item.id === transaction.categoryId)?.name || "Deleted category";
-      const access = state.accesses.find((item) => item.id === transaction.accessId)?.name || "Deleted access";
-      return [category, access, transaction.note, transaction.date].join(" ").toLowerCase().includes(search);
-    });
-}
-
-function getSortedTransactions() {
-  return [...state.transactions].sort((a, b) => `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`));
 }
 
 function showView(viewId) {
-  document.querySelectorAll(".view").forEach((view) => {
-    view.classList.toggle("active", view.id === viewId);
-  });
+  if (!VIEW_TITLES[viewId]) return;
+  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const mobileMoreViews = ["more", "categories", "access", "backup"];
-    const isActive = link.dataset.view === viewId || (link.dataset.view === "more" && mobileMoreViews.includes(viewId));
-    link.classList.toggle("active", isActive);
+    const moreViews = ["more", "categories", "accounts", "backup"];
+    link.classList.toggle("active", link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId)));
   });
-  els.viewTitle.textContent = {
-    dashboard: "Dashboard",
-    add: "Add Transaction",
-    transactions: "Transactions",
-    more: "More",
-    categories: "Categories",
-    access: "Access",
-    backup: "Backup"
-  }[viewId] || "Dashboard";
+  els.viewTitle.textContent = VIEW_TITLES[viewId];
 }
 
-function getTransactionType() {
-  return document.querySelector("input[name='transactionType']:checked").value;
+function applyStoredTheme() { applyTheme(localStorage.getItem(THEME_KEY) || "auto"); }
+function setThemePreference(theme) {
+  if (!["auto", "light", "dark"].includes(theme)) return;
+  localStorage.setItem(THEME_KEY, theme);
+  applyTheme(theme);
+  renderThemeControls();
+  showToast(theme === "auto" ? "Theme follows system." : `${capitalize(theme)} theme saved.`);
+}
+function applyTheme(theme) {
+  if (theme === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.dataset.theme = theme;
+}
+function renderThemeControls() {
+  const theme = localStorage.getItem(THEME_KEY) || "auto";
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.themeChoice === theme);
+  });
 }
 
-function countCategoryTransactions(id) {
-  return state.transactions.filter((transaction) => transaction.categoryId === id).length;
-}
-
-function countAccessTransactions(id) {
-  return state.transactions.filter((transaction) => transaction.accessId === id).length;
-}
-
-function setDefaultDate() {
-  els.transactionDate.value = todayString();
-}
-
+function setDefaultDate() { els.transactionDate.value = todayString(); }
 function setBackupStatus(message) {
   els.backupStatus.textContent = message;
   els.backupStatus.classList.add("active");
 }
-
 function showToast(message) {
   els.toast.textContent = message;
   els.toast.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2800);
 }
-
-function updateNetworkStatus() {
-  if (!els.networkStatus) return;
-  els.networkStatus.textContent = navigator.onLine ? "Online" : "Offline";
-}
-
+function updateNetworkStatus() { els.networkStatus.textContent = navigator.onLine ? "Online" : "Offline"; }
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
-      console.error("Service worker registration failed", error);
-    });
+    navigator.serviceWorker.register("./service-worker.js").catch((error) => console.error("Service worker registration failed", error));
   }
-}
-
-function createId() {
-  if (crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function todayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isValidDate(value) {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime()));
-}
-
-function formatMoney(value) {
-  return money.format(Number(value) || 0);
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat("en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
-  }).format(new Date(`${value}T00:00:00`));
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function capitalize(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }

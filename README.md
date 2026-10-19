@@ -6,10 +6,10 @@ Developed by [Deltashift](https://deltashift.netlify.app/) and [mizukaze554](htt
 
 ## Features
 
-- Dashboard with total balance, monthly income/outcome, access balances, and recent transactions
+- Dashboard with total balance, monthly income/outcome, account balances, and recent transactions
 - Add income and outcome transactions
 - Category management
-- Access/payment source management
+- Account/payment source management (single currency: JPY)
 - Local-only data storage with `localStorage`
 - Export and import all data as JSON
 - Reset local data with confirmation
@@ -29,11 +29,31 @@ Developed by [Deltashift](https://deltashift.netlify.app/) and [mizukaze554](htt
 
 No frameworks, backend, build tools, or external CDN dependencies are required.
 
+## Project Structure
+
+```text
+okane/
+├── app.js              Browser controller and event handling
+├── src/
+│   ├── config.js       App-wide constants
+│   ├── finance.js      Pure balance, total, sort, and filter logic
+│   ├── render.js       Reusable HTML renderers
+│   ├── state.js        Defaults, storage, validation, and migrations
+│   └── utils.js        Date, currency, ID, and escaping helpers
+├── test/               Node unit tests for finance and state logic
+├── index.html
+├── styles.css
+└── service-worker.js
+```
+
+The app uses one currency (Japanese yen) across multiple accounts such as Cash,
+Bank, and PayPay. Existing backups using the old `accesses` data shape are
+migrated automatically when loaded or imported.
+
 ## Run Locally
 
-You can open `index.html` directly in a browser for basic use.
-
-For full PWA and service worker behavior, serve the folder with a local static server:
+Serve the folder with a local static server (native JavaScript modules and the
+service worker require HTTP):
 
 ```bash
 python3 -m http.server 8000
@@ -43,6 +63,12 @@ Then open:
 
 ```text
 http://localhost:8000
+```
+
+## Test
+
+```bash
+npm test
 ```
 
 ## Data
