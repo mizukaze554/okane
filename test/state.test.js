@@ -30,3 +30,10 @@ test("formats a local calendar date and rejects rollover dates", () => {
   assert.equal(isValidDate("2024-02-29"), true);
 });
 
+test("new users start with one asset account", () => {
+  const state = sanitizeState({ categories: [], accounts: [], transactions: [] });
+  assert.equal(state.accounts.length, 1);
+  assert.equal(state.accounts[0].name, "Asset");
+  assert.equal(state.accounts[0].kind, "asset");
+});
+

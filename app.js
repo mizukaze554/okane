@@ -9,7 +9,6 @@ import { capitalize, createId, escapeHtml, formatMoney, isValidDate, todayString
 const store = new StateStore();
 let state = store.load();
 let editingTransactionId = null;
-let editingTransferId = null;
 let deletedTransaction = null;
 let toastTimer = null;
 const els = {};
@@ -43,8 +42,6 @@ function bindEvents() {
   document.querySelectorAll("input[name='transactionType']").forEach((input) => {
     input.addEventListener("change", renderTransactionCategoryOptions);
   });
-  els.transferForm.addEventListener("submit", saveTransfer);
-  els.transferCancelEdit.addEventListener("click", resetTransferForm);
   els.categoryForm.addEventListener("submit", addCategory);
   els.accountForm.addEventListener("submit", addAccount);
   els.transportForm.addEventListener("submit", addTransportRule);
@@ -109,7 +106,7 @@ function saveTransaction(event) {
 }
 
 function editTransaction(id) {
-  const item = state.transactions.find((transaction) => transaction.id === id && transaction.type !== "transfer");
+  const item = state.transactions.find((transaction) => transaction.id === id);
   if (!item) return;
   editingTransactionId = id;
   document.querySelector(`input[name='transactionType'][value='${item.type}']`).checked = true;
@@ -153,60 +150,6 @@ function undoDelete() {
   commit("Transaction restored.");
 }
 
-function saveTransfer(event) {
-  event.preventDefault();
-  const amount = Number(els.transferAmount.value);
-  const fromAccountId = els.transferFrom.value;
-  const toAccountId = els.transferTo.value;
-  const date = els.transferDate.value;
-  if (!positiveAmount(amount)) return showToast("Amount must be greater than 0.");
-  if (!state.accounts.some(({ id }) => id === fromAccountId) || !state.accounts.some(({ id }) => id === toAccountId)) {
-    return showToast("Choose both accounts.");
-  }
-  if (fromAccountId === toAccountId) return showToast("Choose two different accounts.");
-  if (!isValidDate(date)) return showToast("Enter a valid date.");
-  const existing = state.transactions.find(({ id }) => id === editingTransferId);
-  const transfer = {
-    id: existing?.id || createId(),
-    type: "transfer",
-    amount,
-    fromAccountId,
-    toAccountId,
-    note: els.transferNote.value.trim(),
-    date,
-    createdAt: existing?.createdAt || new Date().toISOString()
-  };
-  if (existing) state.transactions[state.transactions.indexOf(existing)] = transfer;
-  else state.transactions.unshift(transfer);
-  const message = existing ? "Transfer updated." : "Transfer saved.";
-  resetTransferForm();
-  commit(message);
-}
-
-function editTransfer(id) {
-  const item = state.transactions.find((transaction) => transaction.id === id && transaction.type === "transfer");
-  if (!item) return;
-  editingTransferId = id;
-  els.transferAmount.value = item.amount;
-  els.transferFrom.value = item.fromAccountId;
-  els.transferTo.value = item.toAccountId;
-  els.transferNote.value = item.note;
-  els.transferDate.value = item.date;
-  els.transferSubmit.textContent = "Update transfer";
-  els.transferCancelEdit.hidden = false;
-  showView("transfer");
-  els.transferAmount.focus();
-}
-
-function resetTransferForm() {
-  editingTransferId = null;
-  els.transferForm.reset();
-  els.transferDate.value = todayString();
-  els.transferSubmit.textContent = "Save transfer";
-  els.transferCancelEdit.hidden = true;
-  renderAccountOptions();
-}
-
 function addCategory(event) {
   event.preventDefault();
   const name = els.categoryName.value.trim();
@@ -233,22 +176,23 @@ function deleteCategory(id) {
 function addAccount(event) {
   event.preventDefault();
   const name = els.accountName.value.trim();
-  const initialBalance = Number(els.accountInitialBalance.value);
-  if (!name) return showToast("Account name cannot be empty.");
-  if (!Number.isFinite(initialBalance)) return showToast("Enter a valid initial balance.");
-  if (state.accounts.some((item) => item.name.toLowerCase() === name.toLowerCase())) return showToast("That account already exists.");
-  state.accounts.push({ id: createId(), name, initialBalance, createdAt: new Date().toISOString() });
+  const amountOwed = Number(els.accountInitialBalance.value);
+  if (!name) return showToast("Debt name cannot be empty.");
+  if (!positiveAmount(amountOwed)) return showToast("Amount owed must be greater than 0.");
+  if (state.accounts.some((item) => item.name.toLowerCase() === name.toLowerCase())) return showToast("That name already exists.");
+  state.accounts.push({ id: createId(), name, initialBalance: -amountOwed, kind: "debt", createdAt: new Date().toISOString() });
   els.accountForm.reset();
-  els.accountInitialBalance.value = "0";
-  commit("Account added.");
+  commit("Debt added.");
 }
 
 function deleteAccount(id) {
-  const used = state.transactions.some((item) => item.accountId === id || item.fromAccountId === id || item.toAccountId === id) ||
+  const account = state.accounts.find((item) => item.id === id);
+  if (account?.kind === "asset") return showToast("The main asset cannot be deleted.");
+  const used = state.transactions.some((item) => item.accountId === id) ||
     state.transportRules.some((item) => item.accountId === id) || state.recurringRules.some((item) => item.accountId === id);
   if (used) return showToast("Account is in use and cannot be deleted.");
   state.accounts = state.accounts.filter((item) => item.id !== id);
-  commit("Account deleted.");
+  commit("Debt deleted.");
 }
 
 function addTransportRule(event) {
@@ -430,7 +374,6 @@ function renderTransactions() {
 function bindTransactionActions(container) {
   bindDataAction(container, "delete-transaction", deleteTransaction);
   bindDataAction(container, "edit-transaction", editTransaction);
-  bindDataAction(container, "edit-transfer", editTransfer);
 }
 
 function renderCategories() {
@@ -444,8 +387,8 @@ function renderCategories() {
 function renderAccounts() {
   const accounts = calculateAccountSummaries(state);
   els.accountList.innerHTML = accounts.length ? accounts.map((account) => accountManagementRow(account,
-    state.transactions.filter((item) => item.accountId === account.id || item.fromAccountId === account.id || item.toAccountId === account.id).length
-  )).join("") : emptyState("No accounts yet", "Add cash, a bank, card, or wallet.");
+    state.transactions.filter((item) => item.accountId === account.id).length
+  )).join("") : emptyState("No asset yet", "Reset data to restore the default asset.");
   bindDataAction(els.accountList, "delete-account", deleteAccount);
 }
 
@@ -543,8 +486,6 @@ function renderCategoryOptions() {
 
 function renderAccountOptions() {
   [els.transactionAccount, els.transportAccount, els.recurringAccount].forEach((select) => setSelectOptions(select, state.accounts, "Choose account", select.value));
-  setSelectOptions(els.transferFrom, state.accounts, "Choose source", els.transferFrom.value);
-  setSelectOptions(els.transferTo, state.accounts, "Choose destination", els.transferTo.value);
 }
 
 function renderFilterOptions() {
@@ -626,7 +567,7 @@ function showView(viewId) {
   if (!VIEW_TITLES[viewId]) return;
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const moreViews = ["more", "categories", "accounts", "backup", "transport", "recurring", "planning", "transfer", "analytics"];
+    const moreViews = ["more", "categories", "accounts", "backup", "transport", "recurring", "planning", "analytics"];
     link.classList.toggle("active", link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId)));
   });
   els.viewTitle.textContent = VIEW_TITLES[viewId];
@@ -634,7 +575,6 @@ function showView(viewId) {
 
 function setDefaults() {
   els.transactionDate.value = todayString();
-  els.transferDate.value = todayString();
   els.analyticsMonth.value = todayString().slice(0, 7);
   setFeatureDefaults();
 }

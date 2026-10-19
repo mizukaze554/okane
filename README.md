@@ -9,13 +9,12 @@ Developed by [Nerdhook](https://nerdhook.site/), a software development organiza
 - Dashboard with total balance, monthly income/outcome, account balances, and recent transactions
 - Add income and outcome transactions
 - Edit transactions and undo accidental deletion
-- Balance-neutral transfers between JPY accounts
 - Monthly transport plans with going and return fare calculation
 - Recurring monthly income and expense automation
 - Analytics for cash flow, categories, trends, accounts, and transport
 - Monthly category budgets and savings goals
 - Category management
-- Account/payment source management (single currency: JPY)
+- One default JPY asset, with user-managed debt accounts
 - Local-only data storage with `localStorage`
 - Export and import all data as JSON
 - Reset local data with confirmation
@@ -54,10 +53,11 @@ okane/
 └── service-worker.js
 ```
 
-The app uses one currency (Japanese yen) across multiple accounts such as Cash,
-Bank, and PayPay. Account transfers move money without changing income or
-expense totals. Existing backups using the old `accesses` data shape are
-migrated automatically when loaded or imported.
+The app uses one currency (Japanese yen) and gives new users one fixed `Asset`
+account. Users can add debts by entering the positive amount owed; Okane stores
+that amount as a negative balance.
+Existing backups using the old `accesses` data shape are migrated automatically
+when loaded or imported.
 
 ## Run Locally
 

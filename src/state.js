@@ -9,12 +9,13 @@ export function createDefaultState() {
       .map((name) => ({ name, type: "outcome" }))
   ].map((category) => ({ id: createId(), ...category, createdAt }));
 
-  const accounts = ["Cash", "Bank", "PayPay"].map((name) => ({
+  const accounts = [{
     id: createId(),
-    name,
+    name: "Asset",
     initialBalance: 0,
+    kind: "asset",
     createdAt
-  }));
+  }];
 
   return {
     version: APP_VERSION,
@@ -51,11 +52,12 @@ export function sanitizeState(input) {
       id: String(item.id),
       name: String(item.name).slice(0, 60),
       initialBalance: Number(item.initialBalance) || 0,
+      kind: item.kind === "debt" ? "debt" : item.kind === "asset" ? "asset" : "legacy",
       createdAt: item.createdAt || new Date().toISOString()
     }));
 
   const transactions = sourceTransactions
-    .filter((item) => item?.id && ["income", "outcome", "transfer"].includes(item.type) && Number(item.amount) > 0)
+    .filter((item) => item?.id && ["income", "outcome"].includes(item.type) && Number(item.amount) > 0)
     .map((item) => sanitizeTransaction(item));
 
   const transportRules = sanitizeList(input?.transportRules, (item) => ({
@@ -132,13 +134,6 @@ function sanitizeTransaction(item) {
     date: isValidDate(item.date) ? item.date : todayString(),
     createdAt: item.createdAt || new Date().toISOString()
   };
-  if (item.type === "transfer") {
-    return {
-      ...base,
-      fromAccountId: String(item.fromAccountId || ""),
-      toAccountId: String(item.toAccountId || "")
-    };
-  }
   return {
     ...base,
     categoryId: item.categoryId ? String(item.categoryId) : "",

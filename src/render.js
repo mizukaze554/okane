@@ -5,7 +5,6 @@ export function emptyState(title, message) {
 }
 
 export function transactionCard(transaction, state) {
-  if (transaction.type === "transfer") return transferCard(transaction, state);
   const category = state.categories.find(({ id }) => id === transaction.categoryId);
   const account = state.accounts.find(({ id }) => id === transaction.accountId);
   const sign = transaction.type === "income" ? "+" : "-";
@@ -29,34 +28,13 @@ export function transactionCard(transaction, state) {
     </article>`;
 }
 
-function transferCard(transaction, state) {
-  const from = state.accounts.find(({ id }) => id === transaction.fromAccountId)?.name || "Deleted account";
-  const to = state.accounts.find(({ id }) => id === transaction.toAccountId)?.name || "Deleted account";
-  return `
-    <article class="finance-row">
-      <div class="row-main">
-        <p class="row-title">${escapeHtml(from)} → ${escapeHtml(to)}</p>
-        <p class="row-sub">${escapeHtml(transaction.note || "Account transfer")}</p>
-        <p class="row-detail">${formatDate(transaction.date)} · Balance-neutral transfer</p>
-      </div>
-      <div class="row-side">
-        <div class="amount">${formatMoney(transaction.amount)}</div>
-        <span class="pill">transfer</span>
-        <div class="row-actions">
-          <button class="text-link" type="button" data-edit-transfer="${escapeHtml(transaction.id)}">Edit</button>
-          <button class="delete-link" type="button" data-delete-transaction="${escapeHtml(transaction.id)}">Delete</button>
-        </div>
-      </div>
-    </article>`;
-}
-
 export function accountSummaryCard(account) {
   const max = Math.max(account.totalIncome, account.totalOutcome, Math.abs(account.currentBalance), 1);
   const progress = Math.min(100, Math.max(8, Math.abs(account.currentBalance) / max * 100));
   return `
     <article class="finance-row">
       <div class="row-main">
-        <p class="row-title">${escapeHtml(account.name)}</p>
+        <p class="row-title">${escapeHtml(account.name)} <span class="pill">${account.kind === "debt" ? "debt" : "asset"}</span></p>
         <p class="row-sub">Initial ${formatMoney(account.initialBalance)} · In ${formatMoney(account.totalIncome)} · Out ${formatMoney(account.totalOutcome)}</p>
       </div>
       <div class="row-side"><div class="amount">${formatMoney(account.currentBalance)}</div></div>

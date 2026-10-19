@@ -8,12 +8,11 @@ const state = {
   transactions: [
     { type: "income", amount: 10000, accountId: "bank", categoryId: "salary", date: "2026-10-01" },
     { type: "outcome", amount: 1000, accountId: "bank", categoryId: "food", date: "2026-10-02" },
-    { type: "outcome", amount: 500, accountId: "bank", categoryId: "transport", date: "2026-10-02", sourceType: "transport" },
-    { type: "transfer", amount: 3000, fromAccountId: "bank", toAccountId: "cash", date: "2026-10-03" }
+    { type: "outcome", amount: 500, accountId: "bank", categoryId: "transport", date: "2026-10-02", sourceType: "transport" }
   ]
 };
 
-test("builds analytics while excluding account transfers", () => {
+test("builds monthly analytics", () => {
   const result = buildAnalytics(state, "2026-10");
   assert.equal(result.income, 10000);
   assert.equal(result.outcome, 1500);

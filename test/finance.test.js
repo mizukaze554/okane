@@ -34,20 +34,6 @@ test("calculates each account balance in a single pass", () => {
   assert.equal(summaries[1].currentBalance, 400);
 });
 
-test("moves money between accounts without changing income or expense totals", () => {
-  const withTransfer = {
-    ...state,
-    transactions: [...state.transactions, {
-      id: "4", type: "transfer", amount: 400, fromAccountId: "bank", toAccountId: "cash",
-      note: "Top up", date: "2026-10-03", createdAt: "2026-10-03T00:00:00Z"
-    }]
-  };
-  const accounts = calculateAccountSummaries(withTransfer);
-  assert.equal(accounts.find(({ id }) => id === "bank").currentBalance, 2300);
-  assert.equal(accounts.find(({ id }) => id === "cash").currentBalance, 800);
-  assert.equal(calculateTotals(withTransfer, "2026-10-19").monthOutcome, 300);
-});
-
 test("filters using account and free text", () => {
   const result = filterTransactions(state, {
     search: "lunch",

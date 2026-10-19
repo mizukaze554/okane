@@ -25,7 +25,6 @@
         <nav class="nav-list">
           <button class="nav-link active" data-view="dashboard" type="button">Dashboard</button>
           <button class="nav-link" data-view="add" type="button">Add transaction</button>
-          <button class="nav-link" data-view="transfer" type="button">Transfer</button>
           <button class="nav-link" data-view="transactions" type="button">Transactions</button>
           <button class="nav-link" data-view="analytics" type="button">Analytics</button>
           <button class="nav-link" data-view="transport" type="button">Transport</button>
@@ -133,28 +132,6 @@
           </form>
         </section>
 
-        <section id="transfer" class="view" aria-labelledby="transferTitle">
-          <div class="section-heading">
-            <h2 id="transferTitle">Transfer between accounts</h2>
-            <p>Move Japanese yen without counting it as income or spending.</p>
-          </div>
-          <form id="transferForm" class="transaction-panel">
-            <label class="amount-field">Amount
-              <input id="transferAmount" type="number" min="1" step="1" inputmode="numeric" required>
-            </label>
-            <div class="form-grid">
-              <label>From account<select id="transferFrom" required></select></label>
-              <label>To account<select id="transferTo" required></select></label>
-              <label class="full">Note<input id="transferNote" type="text" maxlength="160" placeholder="Optional memo"></label>
-              <label>Date<input id="transferDate" type="date" required></label>
-            </div>
-            <div class="sticky-actions">
-              <button id="transferSubmit" class="button primary wide" type="submit">Save transfer</button>
-              <button id="transferCancelEdit" class="button ghost wide" type="button" hidden>Cancel editing</button>
-            </div>
-          </form>
-        </section>
-
         <section id="transactions" class="view" aria-labelledby="transactionsTitle">
           <div class="section-heading">
             <h2 id="transactionsTitle">Transactions</h2>
@@ -172,7 +149,6 @@
                   <option value="all">All</option>
                   <option value="income">Income</option>
                   <option value="outcome">Outcome</option>
-                  <option value="transfer">Transfer</option>
                 </select>
               </label>
               <label>
@@ -281,7 +257,6 @@
             <p>Manage setup, accounts, and local data.</p>
           </div>
           <div class="menu-list">
-            <button class="menu-row" data-view="transfer" type="button"><span>Transfer</span><strong>Move money between accounts</strong></button>
             <button class="menu-row" data-view="analytics" type="button"><span>Analytics</span><strong>Charts and monthly insights</strong></button>
             <button class="menu-row" data-view="transport" type="button"><span>Transport</span><strong>Going and return fare plans</strong></button>
             <button class="menu-row" data-view="recurring" type="button"><span>Recurring</span><strong>Automatic monthly entries</strong></button>
@@ -345,19 +320,19 @@
 
         <section id="accounts" class="view" aria-labelledby="accountsTitle">
           <div class="section-heading">
-            <h2 id="accountsTitle">Accounts</h2>
-            <p>Track payment sources and calculated balances in Japanese yen.</p>
+            <h2 id="accountsTitle">Asset and debts</h2>
+            <p>Your main asset is created automatically. Add debts here when needed.</p>
           </div>
           <form id="accountForm" class="management-form">
             <label>
-              Name
-              <input id="accountName" type="text" maxlength="60" required>
+              Debt name
+              <input id="accountName" type="text" maxlength="60" placeholder="Credit card debt" required>
             </label>
             <label>
-              Initial balance
-              <input id="accountInitialBalance" type="number" step="1" value="0">
+              Amount owed
+              <input id="accountInitialBalance" type="number" min="1" step="1" placeholder="0" required>
             </label>
-            <button class="button primary" type="submit">Add</button>
+            <button class="button primary" type="submit">Add debt</button>
           </form>
           <div id="accountList" class="finance-list"></div>
         </section>
