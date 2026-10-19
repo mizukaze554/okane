@@ -20,6 +20,10 @@ test("accepts old and new backup shapes", () => {
   assert.doesNotThrow(() => validateImport({ categories: [], accounts: [], transactions: [] }));
 });
 
+test("rejects malformed feature collections", () => {
+  assert.throws(() => validateImport({ categories: [], accounts: [], transactions: [], budgets: {} }), /budgets/);
+});
+
 test("formats a local calendar date and rejects rollover dates", () => {
   assert.equal(todayString(new Date(2026, 9, 19, 0, 30)), "2026-10-19");
   assert.equal(isValidDate("2026-02-29"), false);

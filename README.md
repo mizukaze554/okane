@@ -8,6 +8,12 @@ Developed by [Nerdhook](https://nerdhook.site/), a software development organiza
 
 - Dashboard with total balance, monthly income/outcome, account balances, and recent transactions
 - Add income and outcome transactions
+- Edit transactions and undo accidental deletion
+- Balance-neutral transfers between JPY accounts
+- Monthly transport plans with going and return fare calculation
+- Recurring monthly income and expense automation
+- Analytics for cash flow, categories, trends, accounts, and transport
+- Monthly category budgets and savings goals
 - Category management
 - Account/payment source management (single currency: JPY)
 - Local-only data storage with `localStorage`
@@ -36,6 +42,8 @@ okane/
 ├── app.js              Browser controller and event handling
 ├── src/
 │   ├── config.js       App-wide constants
+│   ├── analytics.js    Monthly summaries and trends
+│   ├── automation.js   Transport and recurring generation
 │   ├── finance.js      Pure balance, total, sort, and filter logic
 │   ├── render.js       Reusable HTML renderers
 │   ├── state.js        Defaults, storage, validation, and migrations
@@ -47,7 +55,8 @@ okane/
 ```
 
 The app uses one currency (Japanese yen) across multiple accounts such as Cash,
-Bank, and PayPay. Existing backups using the old `accesses` data shape are
+Bank, and PayPay. Account transfers move money without changing income or
+expense totals. Existing backups using the old `accesses` data shape are
 migrated automatically when loaded or imported.
 
 ## Run Locally

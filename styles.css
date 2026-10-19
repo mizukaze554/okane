@@ -373,6 +373,12 @@ h3 {
   color: var(--black);
 }
 
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .account-progress {
   grid-column: 1 / -1;
   height: 4px;
@@ -565,6 +571,151 @@ button:focus-visible {
   align-items: end;
 }
 
+.feature-form {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.calculated-total {
+  display: grid;
+  gap: 5px;
+  align-self: stretch;
+  align-content: center;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  background: var(--bg);
+}
+
+.calculated-total span,
+.metric-card span,
+.transport-metric span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.metric-grid,
+.analytics-grid,
+.planning-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.analytics-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.metric-card,
+.panel-card {
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.metric-card strong,
+.transport-metric strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 7px;
+  font-size: clamp(1.2rem, 5vw, 1.8rem);
+}
+
+.chart-list {
+  display: grid;
+  gap: 14px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: minmax(75px, 0.8fr) minmax(100px, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.chart-bar,
+.progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.chart-bar span,
+.progress-track span {
+  display: block;
+  width: var(--value, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--black);
+}
+
+.chart-bar .outcome-bar,
+.progress-track .over-budget {
+  background: var(--bad);
+}
+
+.compact-field {
+  min-width: 150px;
+}
+
+.stack-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.budget-row,
+.goal-row {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.budget-row:last-child,
+.goal-row:last-child {
+  border-bottom: 0;
+}
+
+.budget-head,
+.goal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.budget-head p,
+.goal-head p {
+  margin: 0;
+  font-weight: 850;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.small-button {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
 .menu-row {
   display: grid;
   gap: 5px;
@@ -726,11 +877,25 @@ button:focus-visible {
   opacity: 0;
   pointer-events: none;
   transform: translateY(10px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
   transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.toast button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--white);
+  color: var(--black);
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .toast.show {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
 }
 
@@ -779,6 +944,15 @@ button:focus-visible {
 
   .backup-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .analytics-grid,
+  .planning-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

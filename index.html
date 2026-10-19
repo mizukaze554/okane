@@ -25,7 +25,12 @@
         <nav class="nav-list">
           <button class="nav-link active" data-view="dashboard" type="button">Dashboard</button>
           <button class="nav-link" data-view="add" type="button">Add transaction</button>
+          <button class="nav-link" data-view="transfer" type="button">Transfer</button>
           <button class="nav-link" data-view="transactions" type="button">Transactions</button>
+          <button class="nav-link" data-view="analytics" type="button">Analytics</button>
+          <button class="nav-link" data-view="transport" type="button">Transport</button>
+          <button class="nav-link" data-view="recurring" type="button">Recurring</button>
+          <button class="nav-link" data-view="planning" type="button">Planning</button>
           <button class="nav-link" data-view="categories" type="button">Categories</button>
           <button class="nav-link" data-view="accounts" type="button">Accounts</button>
           <button class="nav-link" data-view="backup" type="button">Backup</button>
@@ -122,7 +127,30 @@
             </div>
 
             <div class="sticky-actions">
-              <button class="button primary wide" type="submit">Save transaction</button>
+              <button id="transactionSubmit" class="button primary wide" type="submit">Save transaction</button>
+              <button id="transactionCancelEdit" class="button ghost wide" type="button" hidden>Cancel editing</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="transfer" class="view" aria-labelledby="transferTitle">
+          <div class="section-heading">
+            <h2 id="transferTitle">Transfer between accounts</h2>
+            <p>Move Japanese yen without counting it as income or spending.</p>
+          </div>
+          <form id="transferForm" class="transaction-panel">
+            <label class="amount-field">Amount
+              <input id="transferAmount" type="number" min="1" step="1" inputmode="numeric" required>
+            </label>
+            <div class="form-grid">
+              <label>From account<select id="transferFrom" required></select></label>
+              <label>To account<select id="transferTo" required></select></label>
+              <label class="full">Note<input id="transferNote" type="text" maxlength="160" placeholder="Optional memo"></label>
+              <label>Date<input id="transferDate" type="date" required></label>
+            </div>
+            <div class="sticky-actions">
+              <button id="transferSubmit" class="button primary wide" type="submit">Save transfer</button>
+              <button id="transferCancelEdit" class="button ghost wide" type="button" hidden>Cancel editing</button>
             </div>
           </form>
         </section>
@@ -144,6 +172,7 @@
                   <option value="all">All</option>
                   <option value="income">Income</option>
                   <option value="outcome">Outcome</option>
+                  <option value="transfer">Transfer</option>
                 </select>
               </label>
               <label>
@@ -164,12 +193,99 @@
           <div id="transactionList" class="finance-list"></div>
         </section>
 
+        <section id="analytics" class="view" aria-labelledby="analyticsTitle">
+          <div class="section-row section-heading">
+            <div><h2 id="analyticsTitle">Financial analytics</h2><p>Understand income, spending, and account balances.</p></div>
+          </div>
+          <div class="analytics-filters">
+            <label class="compact-field">Month<input id="analyticsMonth" type="month"></label>
+            <label class="compact-field">Account<select id="analyticsAccount"></select></label>
+            <label class="compact-field">Category<select id="analyticsCategory"></select></label>
+          </div>
+          <div class="metric-grid">
+            <article class="metric-card"><span>Income</span><strong id="analyticsIncome">¥0</strong></article>
+            <article class="metric-card"><span>Expenses</span><strong id="analyticsOutcome">¥0</strong></article>
+            <article class="metric-card"><span>Net cash flow</span><strong id="analyticsNet">¥0</strong></article>
+            <article class="metric-card"><span>Average active day</span><strong id="analyticsAverage">¥0</strong></article>
+          </div>
+          <div class="analytics-grid">
+            <section class="panel-card"><h3>Spending by category</h3><div id="analyticsCategories" class="chart-list"></div></section>
+            <section class="panel-card"><h3>Six-month trend</h3><div id="analyticsTrend" class="chart-list"></div></section>
+            <section class="panel-card"><h3>Account balances</h3><div id="analyticsAccounts" class="chart-list"></div></section>
+            <section class="panel-card"><h3>Daily spending</h3><div id="analyticsDaily" class="chart-list"></div></section>
+            <section class="panel-card transport-metric"><span>Transport this month</span><strong id="analyticsTransport">¥0</strong></section>
+          </div>
+        </section>
+
+        <section id="transport" class="view" aria-labelledby="transportTitle">
+          <div class="section-heading"><h2 id="transportTitle">Transport automation</h2><p>Calculate a monthly commute from going and return fares.</p></div>
+          <form id="transportForm" class="management-form feature-form">
+            <label>Name<input id="transportName" type="text" maxlength="60" placeholder="Work commute" required></label>
+            <label>Going fare<input id="transportGoFare" type="number" min="0" step="1" required></label>
+            <label>Return fare<input id="transportReturnFare" type="number" min="0" step="1" required></label>
+            <label>Travel days<input id="transportDays" type="number" min="1" max="31" step="1" required></label>
+            <label>Month<input id="transportMonth" type="month" required></label>
+            <label>Account<select id="transportAccount" required></select></label>
+            <label>Category<select id="transportCategory" required></select></label>
+            <div class="calculated-total"><span>Calculated total</span><strong id="transportPreview">¥0</strong></div>
+            <button class="button primary" type="submit">Save transport plan</button>
+          </form>
+          <div id="transportList" class="finance-list"></div>
+        </section>
+
+        <section id="recurring" class="view" aria-labelledby="recurringTitle">
+          <div class="section-heading"><h2 id="recurringTitle">Recurring money</h2><p>Automatically catch up monthly salary, rent, bills, and subscriptions when Okane opens.</p></div>
+          <form id="recurringForm" class="management-form feature-form">
+            <label>Name<input id="recurringName" type="text" maxlength="60" required></label>
+            <label>Type<select id="recurringType"><option value="outcome">Expense</option><option value="income">Income</option></select></label>
+            <label>Amount<input id="recurringAmount" type="number" min="1" step="1" required></label>
+            <label>Day of month<input id="recurringDay" type="number" min="1" max="31" step="1" required></label>
+            <label>Start month<input id="recurringStartMonth" type="month" required></label>
+            <label>Account<select id="recurringAccount" required></select></label>
+            <label>Category<select id="recurringCategory" required></select></label>
+            <button class="button primary" type="submit">Add recurring rule</button>
+          </form>
+          <div id="recurringList" class="finance-list"></div>
+        </section>
+
+        <section id="planning" class="view" aria-labelledby="planningTitle">
+          <div class="section-heading"><h2 id="planningTitle">Budgets and savings</h2><p>Set monthly category limits and track savings goals.</p></div>
+          <div class="planning-grid">
+            <section class="panel-card">
+              <h3>Monthly budgets</h3>
+              <form id="budgetForm" class="stack-form">
+                <label>Month<input id="budgetMonth" type="month" required></label>
+                <label>Expense category<select id="budgetCategory" required></select></label>
+                <label>Limit<input id="budgetLimit" type="number" min="1" step="1" required></label>
+                <button class="button primary" type="submit">Set budget</button>
+              </form>
+              <div id="budgetList" class="finance-list"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Savings goals</h3>
+              <form id="savingsForm" class="stack-form">
+                <label>Goal name<input id="savingsName" type="text" maxlength="60" required></label>
+                <label>Target amount<input id="savingsTarget" type="number" min="1" step="1" required></label>
+                <label>Already saved<input id="savingsSaved" type="number" min="0" step="1" value="0" required></label>
+                <label>Target date<input id="savingsDate" type="date"></label>
+                <button class="button primary" type="submit">Add savings goal</button>
+              </form>
+              <div id="savingsList" class="finance-list"></div>
+            </section>
+          </div>
+        </section>
+
         <section id="more" class="view" aria-labelledby="moreTitle">
           <div class="section-heading">
             <h2 id="moreTitle">More</h2>
             <p>Manage setup, accounts, and local data.</p>
           </div>
           <div class="menu-list">
+            <button class="menu-row" data-view="transfer" type="button"><span>Transfer</span><strong>Move money between accounts</strong></button>
+            <button class="menu-row" data-view="analytics" type="button"><span>Analytics</span><strong>Charts and monthly insights</strong></button>
+            <button class="menu-row" data-view="transport" type="button"><span>Transport</span><strong>Going and return fare plans</strong></button>
+            <button class="menu-row" data-view="recurring" type="button"><span>Recurring</span><strong>Automatic monthly entries</strong></button>
+            <button class="menu-row" data-view="planning" type="button"><span>Planning</span><strong>Budgets and savings goals</strong></button>
             <button class="menu-row" data-view="categories" type="button">
               <span>Categories</span>
               <strong>Income and outcome labels</strong>
@@ -283,7 +399,7 @@
       <button class="nav-link" data-view="more" type="button"><span>More</span></button>
     </nav>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMessage"></span><button id="toastAction" type="button" hidden></button></div>
     <script src="app.js" type="module"></script>
   </body>
 </html>

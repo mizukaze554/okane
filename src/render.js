@@ -5,6 +5,7 @@ export function emptyState(title, message) {
 }
 
 export function transactionCard(transaction, state) {
+  if (transaction.type === "transfer") return transferCard(transaction, state);
   const category = state.categories.find(({ id }) => id === transaction.categoryId);
   const account = state.accounts.find(({ id }) => id === transaction.accountId);
   const sign = transaction.type === "income" ? "+" : "-";
@@ -20,7 +21,31 @@ export function transactionCard(transaction, state) {
       <div class="row-side">
         <div class="amount ${transaction.type}">${sign}${formatMoney(transaction.amount)}</div>
         <span class="pill ${transaction.type}">${transaction.type}</span>
-        <button class="delete-link" type="button" data-delete-transaction="${escapeHtml(transaction.id)}" aria-label="Delete transaction">Delete</button>
+        <div class="row-actions">
+          <button class="text-link" type="button" data-edit-transaction="${escapeHtml(transaction.id)}">Edit</button>
+          <button class="delete-link" type="button" data-delete-transaction="${escapeHtml(transaction.id)}" aria-label="Delete transaction">Delete</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+function transferCard(transaction, state) {
+  const from = state.accounts.find(({ id }) => id === transaction.fromAccountId)?.name || "Deleted account";
+  const to = state.accounts.find(({ id }) => id === transaction.toAccountId)?.name || "Deleted account";
+  return `
+    <article class="finance-row">
+      <div class="row-main">
+        <p class="row-title">${escapeHtml(from)} → ${escapeHtml(to)}</p>
+        <p class="row-sub">${escapeHtml(transaction.note || "Account transfer")}</p>
+        <p class="row-detail">${formatDate(transaction.date)} · Balance-neutral transfer</p>
+      </div>
+      <div class="row-side">
+        <div class="amount">${formatMoney(transaction.amount)}</div>
+        <span class="pill">transfer</span>
+        <div class="row-actions">
+          <button class="text-link" type="button" data-edit-transfer="${escapeHtml(transaction.id)}">Edit</button>
+          <button class="delete-link" type="button" data-delete-transaction="${escapeHtml(transaction.id)}">Delete</button>
+        </div>
       </div>
     </article>`;
 }
