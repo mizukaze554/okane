@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { buildAnalytics, buildMonthlyTrend } from "../src/analytics.js";
 
 const state = {
-  accounts: [{ id: "bank", name: "Bank", initialBalance: 0 }],
+  asset: { initialBalance: 0 },
+  debts: [],
   categories: [{ id: "food", name: "Food" }, { id: "transport", name: "Transport" }],
   transactions: [
-    { type: "income", amount: 10000, accountId: "bank", categoryId: "salary", date: "2026-10-01" },
-    { type: "outcome", amount: 1000, accountId: "bank", categoryId: "food", date: "2026-10-02" },
-    { type: "outcome", amount: 500, accountId: "bank", categoryId: "transport", date: "2026-10-02", sourceType: "transport" }
+    { type: "income", amount: 10000, categoryId: "salary", date: "2026-10-01" },
+    { type: "outcome", amount: 1000, categoryId: "food", date: "2026-10-02" },
+    { type: "outcome", amount: 500, categoryId: "transport", date: "2026-10-02", sourceType: "transport" }
   ]
 };
 
@@ -23,8 +24,8 @@ test("builds monthly analytics", () => {
   assert.deepEqual(result.dailyRows, [{ date: "2026-10-02", amount: 1500 }]);
 });
 
-test("filters analytics by account and category", () => {
-  const result = buildAnalytics(state, "2026-10", { accountId: "bank", categoryId: "food" });
+test("filters analytics by category", () => {
+  const result = buildAnalytics(state, "2026-10", { categoryId: "food" });
   assert.equal(result.income, 0);
   assert.equal(result.outcome, 1000);
   assert.equal(result.categoryRows.length, 1);

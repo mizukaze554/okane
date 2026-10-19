@@ -379,22 +379,6 @@ h3 {
   gap: 8px;
 }
 
-.account-progress {
-  grid-column: 1 / -1;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--bg);
-}
-
-.account-progress span {
-  display: block;
-  height: 100%;
-  width: var(--progress, 0%);
-  border-radius: inherit;
-  background: var(--black);
-}
-
 .empty {
   padding: 24px 18px;
   background: var(--surface);

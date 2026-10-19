@@ -1,9 +1,6 @@
-import { calculateAccountSummaries } from "./finance.js";
-
 export function buildAnalytics(state, month, filters = {}) {
   const transactions = state.transactions
     .filter((item) => item.date.startsWith(month))
-    .filter((item) => !filters.accountId || filters.accountId === "all" || item.accountId === filters.accountId)
     .filter((item) => !filters.categoryId || filters.categoryId === "all" || item.categoryId === filters.categoryId);
   const income = sum(transactions.filter((item) => item.type === "income"));
   const outcomeItems = transactions.filter((item) => item.type === "outcome");
@@ -28,7 +25,6 @@ export function buildAnalytics(state, month, filters = {}) {
     averageDaily: activeDays ? outcome / activeDays : 0,
     categoryRows,
     dailyRows,
-    accountRows: calculateAccountSummaries(state),
     transport: sum(outcomeItems.filter((item) => item.sourceType === "transport" ||
       state.categories.find((category) => category.id === item.categoryId)?.name.toLowerCase().includes("transport")))
   };

@@ -1,8 +1,8 @@
 import { buildAnalytics, buildMonthlyTrend } from "./src/analytics.js";
 import { createTransportTransaction, generateDueRecurring, transportTotal } from "./src/automation.js";
 import { APP_VERSION, THEME_KEY, VIEW_TITLES } from "./src/config.js";
-import { calculateAccountSummaries, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
-import { accountManagementRow, accountSummaryCard, emptyState, transactionCard } from "./src/render.js";
+import { calculateAssetBalance, calculateDebtSummaries, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
+import { emptyState, transactionCard } from "./src/render.js";
 import { createDefaultState, sanitizeState, StateStore, validateImport } from "./src/state.js";
 import { capitalize, createId, escapeHtml, formatMoney, isValidDate, todayString } from "./src/utils.js";
 
@@ -43,7 +43,8 @@ function bindEvents() {
     input.addEventListener("change", renderTransactionCategoryOptions);
   });
   els.categoryForm.addEventListener("submit", addCategory);
-  els.accountForm.addEventListener("submit", addAccount);
+  els.assetForm.addEventListener("submit", updateAsset);
+  els.debtForm.addEventListener("submit", addDebt);
   els.transportForm.addEventListener("submit", addTransportRule);
   [els.transportGoFare, els.transportReturnFare, els.transportDays].forEach((input) => {
     input.addEventListener("input", renderTransportPreview);
@@ -52,8 +53,8 @@ function bindEvents() {
   els.recurringType.addEventListener("change", renderRecurringCategoryOptions);
   els.budgetForm.addEventListener("submit", saveBudget);
   els.savingsForm.addEventListener("submit", addSavingsGoal);
-  [els.analyticsMonth, els.analyticsAccount, els.analyticsCategory].forEach((input) => input.addEventListener("change", renderAnalytics));
-  [els.searchInput, els.filterType, els.filterCategory, els.filterAccount, els.filterMonth].forEach((input) => {
+  [els.analyticsMonth, els.analyticsCategory].forEach((input) => input.addEventListener("change", renderAnalytics));
+  [els.searchInput, els.filterType, els.filterCategory, els.filterMonth].forEach((input) => {
     input.addEventListener("input", renderTransactions);
     input.addEventListener("change", renderTransactions);
   });
@@ -76,11 +77,9 @@ function saveTransaction(event) {
   const type = document.querySelector("input[name='transactionType']:checked").value;
   const amount = Number(els.transactionAmount.value);
   const categoryId = els.transactionCategory.value;
-  const accountId = els.transactionAccount.value;
   const date = els.transactionDate.value;
   if (!positiveAmount(amount)) return showToast("Amount must be greater than 0.");
   if (!state.categories.some(({ id }) => id === categoryId)) return showToast("Category is required.");
-  if (!state.accounts.some(({ id }) => id === accountId)) return showToast("Account is required.");
   if (!isValidDate(date)) return showToast("Enter a valid date.");
 
   const existing = state.transactions.find(({ id }) => id === editingTransactionId);
@@ -90,7 +89,6 @@ function saveTransaction(event) {
     type,
     amount,
     categoryId,
-    accountId,
     note: els.transactionNote.value.trim(),
     date,
     sourceType: existing?.sourceType || "manual",
@@ -113,7 +111,6 @@ function editTransaction(id) {
   renderTransactionCategoryOptions();
   els.transactionAmount.value = item.amount;
   els.transactionCategory.value = item.categoryId;
-  els.transactionAccount.value = item.accountId;
   els.transactionNote.value = item.note;
   els.transactionDate.value = item.date;
   els.transactionSubmit.textContent = "Update transaction";
@@ -130,7 +127,6 @@ function resetTransactionForm() {
   els.transactionCancelEdit.hidden = true;
   els.transactionDate.value = todayString();
   renderTransactionCategoryOptions();
-  renderAccountOptions();
 }
 
 function deleteTransaction(id) {
@@ -164,6 +160,8 @@ function addCategory(event) {
 }
 
 function deleteCategory(id) {
+  const category = state.categories.find((item) => item.id === id);
+  if (category?.name.toLowerCase() === "debt payment") return showToast("Debt Payment is a required category.");
   const used = state.transactions.some((item) => item.categoryId === id) ||
     state.transportRules.some((item) => item.categoryId === id) ||
     state.recurringRules.some((item) => item.categoryId === id) ||
@@ -173,26 +171,46 @@ function deleteCategory(id) {
   commit("Category deleted.");
 }
 
-function addAccount(event) {
+function updateAsset(event) {
   event.preventDefault();
-  const name = els.accountName.value.trim();
-  const amountOwed = Number(els.accountInitialBalance.value);
-  if (!name) return showToast("Debt name cannot be empty.");
-  if (!positiveAmount(amountOwed)) return showToast("Amount owed must be greater than 0.");
-  if (state.accounts.some((item) => item.name.toLowerCase() === name.toLowerCase())) return showToast("That name already exists.");
-  state.accounts.push({ id: createId(), name, initialBalance: -amountOwed, kind: "debt", createdAt: new Date().toISOString() });
-  els.accountForm.reset();
+  const initialBalance = Number(els.assetInitialBalance.value);
+  if (!Number.isFinite(initialBalance)) return showToast("Enter a valid asset balance.");
+  state.asset = { initialBalance, updatedAt: new Date().toISOString() };
+  commit("Asset balance updated.");
+}
+
+function addDebt(event) {
+  event.preventDefault();
+  const name = els.debtName.value.trim();
+  const originalAmount = Number(els.debtAmount.value);
+  if (!name || !positiveAmount(originalAmount)) return showToast("Enter a debt name and amount.");
+  if (state.debts.some((item) => item.name.toLowerCase() === name.toLowerCase())) return showToast("That debt already exists.");
+  state.debts.unshift({ id: createId(), name, originalAmount, createdAt: new Date().toISOString() });
+  els.debtForm.reset();
   commit("Debt added.");
 }
 
-function deleteAccount(id) {
-  const account = state.accounts.find((item) => item.id === id);
-  const assetCount = state.accounts.filter((item) => item.kind !== "debt").length;
-  if (account?.kind !== "debt" && assetCount <= 1) return showToast("The final asset cannot be deleted.");
-  const used = state.transactions.some((item) => item.accountId === id) ||
-    state.transportRules.some((item) => item.accountId === id) || state.recurringRules.some((item) => item.accountId === id);
-  if (used) return showToast("Account is in use and cannot be deleted.");
-  state.accounts = state.accounts.filter((item) => item.id !== id);
+function payDebt(id) {
+  const debt = calculateDebtSummaries(state).find((item) => item.id === id);
+  if (!debt || debt.remaining <= 0) return;
+  const available = calculateAssetBalance(state);
+  const amount = Number(prompt(`Payment amount for ${debt.name}:`, String(Math.min(debt.remaining, Math.max(0, available)))));
+  if (!positiveAmount(amount)) return;
+  if (amount > debt.remaining) return showToast("Payment exceeds the remaining debt.");
+  if (amount > available) return showToast("Not enough asset balance for this payment.");
+  const category = state.categories.find((item) => item.name.toLowerCase() === "debt payment" && item.type !== "income");
+  if (!category) return showToast("Debt Payment category is missing. Reload the app to restore it.");
+  state.transactions.unshift({
+    id: createId(), type: "outcome", amount, categoryId: category.id, debtId: debt.id,
+    note: `Payment to ${debt.name}`, date: todayString(), sourceType: "debt", sourceId: debt.id,
+    sourcePeriod: "", createdAt: new Date().toISOString()
+  });
+  commit("Debt payment recorded.");
+}
+
+function deleteDebt(id) {
+  if (state.transactions.some((item) => item.debtId === id)) return showToast("Debt with payments cannot be deleted.");
+  state.debts = state.debts.filter((item) => item.id !== id);
   commit("Debt deleted.");
 }
 
@@ -205,13 +223,11 @@ function addTransportRule(event) {
     returnFare: Number(els.transportReturnFare.value),
     days: Number(els.transportDays.value),
     month: els.transportMonth.value,
-    accountId: els.transportAccount.value,
     categoryId: els.transportCategory.value,
     createdAt: new Date().toISOString()
   };
   if (!rule.name || rule.goFare < 0 || rule.returnFare < 0 || !positiveAmount(rule.days) || !rule.month) return showToast("Complete the transport plan.");
   if (!positiveAmount(transportTotal(rule))) return showToast("Transport total must be greater than 0.");
-  if (!state.accounts.some(({ id }) => id === rule.accountId)) return showToast("Choose an account.");
   if (!state.categories.some(({ id }) => id === rule.categoryId)) return showToast("Choose a category.");
   state.transportRules.unshift(rule);
   els.transportForm.reset();
@@ -243,11 +259,10 @@ function addRecurringRule(event) {
   const rule = {
     id: createId(), name: els.recurringName.value.trim(), type: els.recurringType.value,
     amount: Number(els.recurringAmount.value), day: Number(els.recurringDay.value),
-    startMonth: els.recurringStartMonth.value, accountId: els.recurringAccount.value,
+    startMonth: els.recurringStartMonth.value,
     categoryId: els.recurringCategory.value, active: true, createdAt: new Date().toISOString()
   };
   if (!rule.name || !positiveAmount(rule.amount) || rule.day < 1 || rule.day > 31 || !rule.startMonth) return showToast("Complete the recurring rule.");
-  if (!state.accounts.some(({ id }) => id === rule.accountId)) return showToast("Choose an account.");
   if (!state.categories.some(({ id }) => id === rule.categoryId)) return showToast("Choose a category.");
   state.recurringRules.unshift(rule);
   els.recurringForm.reset();
@@ -327,7 +342,6 @@ function deleteSavingsGoal(id) {
 
 function renderAll() {
   renderThemeControls();
-  renderAccountOptions();
   renderTransactionCategoryOptions();
   renderRecurringCategoryOptions();
   renderCategoryOptions();
@@ -336,7 +350,7 @@ function renderAll() {
   renderDashboard();
   renderTransactions();
   renderCategories();
-  renderAccounts();
+  renderAssetAndDebts();
   renderTransport();
   renderRecurring();
   renderAnalytics();
@@ -345,8 +359,7 @@ function renderAll() {
 
 function renderDashboard() {
   const totals = calculateTotals(state);
-  const accounts = calculateAccountSummaries(state);
-  els.totalBalance.textContent = formatMoney(accounts.reduce((sum, item) => sum + item.currentBalance, 0));
+  els.totalBalance.textContent = formatMoney(calculateAssetBalance(state));
   els.totalIncome.textContent = formatMoney(totals.totalIncome);
   els.totalOutcome.textContent = formatMoney(totals.totalOutcome);
   els.transactionCount.textContent = String(totals.transactionCount);
@@ -357,7 +370,6 @@ function renderDashboard() {
   const maxMonthly = Math.max(totals.monthIncome, totals.monthOutcome, 1);
   els.incomeBar.style.width = `${totals.monthIncome / maxMonthly * 100}%`;
   els.outcomeBar.style.width = `${totals.monthOutcome / maxMonthly * 100}%`;
-  els.dashboardAccountSummary.innerHTML = accounts.length ? accounts.map(accountSummaryCard).join("") : emptyState("No accounts yet", "Add an account to start tracking balances.");
   const recent = sortTransactions(state.transactions).slice(0, 5);
   els.dashboardRecentTransactions.innerHTML = recent.length ? recent.map((item) => transactionCard(item, state)).join("") : emptyState("No transactions yet", "Add your first transaction.");
   bindTransactionActions(els.dashboardRecentTransactions);
@@ -366,7 +378,7 @@ function renderDashboard() {
 function renderTransactions() {
   const transactions = filterTransactions(state, {
     search: els.searchInput.value, type: els.filterType.value, categoryId: els.filterCategory.value,
-    accountId: els.filterAccount.value, month: els.filterMonth.value
+    month: els.filterMonth.value
   });
   els.transactionList.innerHTML = transactions.length ? transactions.map((item) => transactionCard(item, state)).join("") : emptyState("No matching transactions", "Try changing the filters or add a transaction.");
   bindTransactionActions(els.transactionList);
@@ -385,12 +397,18 @@ function renderCategories() {
   bindDataAction(els.categoryList, "delete-category", deleteCategory);
 }
 
-function renderAccounts() {
-  const accounts = calculateAccountSummaries(state);
-  els.accountList.innerHTML = accounts.length ? accounts.map((account) => accountManagementRow(account,
-    state.transactions.filter((item) => item.accountId === account.id).length
-  )).join("") : emptyState("No asset yet", "Reset data to restore the default asset.");
-  bindDataAction(els.accountList, "delete-account", deleteAccount);
+function renderAssetAndDebts() {
+  els.assetInitialBalance.value = state.asset.initialBalance;
+  const debts = calculateDebtSummaries(state);
+  els.debtList.innerHTML = debts.length ? debts.map((debt) => {
+    const percentage = Math.min(100, debt.paid / debt.originalAmount * 100);
+    return `<article class="goal-row"><div class="goal-head"><p>${escapeHtml(debt.name)}</p><button class="delete-link" data-delete-debt="${escapeHtml(debt.id)}" type="button">Delete</button></div>
+      <div class="progress-track"><span style="--value:${percentage}%"></span></div>
+      <p class="row-sub">${formatMoney(debt.remaining)} remaining · ${formatMoney(debt.paid)} paid of ${formatMoney(debt.originalAmount)}</p>
+      <button class="button ghost small-button" data-pay-debt="${escapeHtml(debt.id)}" type="button" ${debt.remaining <= 0 ? "disabled" : ""}>${debt.remaining <= 0 ? "Paid" : "Pay from asset"}</button></article>`;
+  }).join("") : emptyState("No debts", "Add a debt when you need to track money owed.");
+  bindDataAction(els.debtList, "pay-debt", payDebt);
+  bindDataAction(els.debtList, "delete-debt", deleteDebt);
 }
 
 function renderTransportPreview() {
@@ -423,10 +441,7 @@ function renderRecurring() {
 
 function renderAnalytics() {
   const month = els.analyticsMonth.value || todayString().slice(0, 7);
-  const analytics = buildAnalytics(state, month, {
-    accountId: els.analyticsAccount.value,
-    categoryId: els.analyticsCategory.value
-  });
+  const analytics = buildAnalytics(state, month, { categoryId: els.analyticsCategory.value });
   els.analyticsIncome.textContent = formatMoney(analytics.income);
   els.analyticsOutcome.textContent = formatMoney(analytics.outcome);
   els.analyticsNet.textContent = formatMoney(analytics.net);
@@ -438,8 +453,6 @@ function renderAnalytics() {
   const trend = buildMonthlyTrend(state, month);
   const maxTrend = Math.max(...trend.map((item) => Math.max(item.income, item.outcome)), 1);
   els.analyticsTrend.innerHTML = trend.map((item) => `<div class="chart-row"><span>${item.month}</span><div class="chart-bar"><span class="outcome-bar" style="--value:${item.outcome / maxTrend * 100}%"></span></div><strong>${formatMoney(item.outcome)}</strong></div>`).join("");
-  const maxAccount = Math.max(...analytics.accountRows.map((item) => Math.abs(item.currentBalance)), 1);
-  els.analyticsAccounts.innerHTML = analytics.accountRows.length ? analytics.accountRows.map((item) => `<div class="chart-row"><span>${escapeHtml(item.name)}</span><div class="chart-bar"><span style="--value:${Math.abs(item.currentBalance) / maxAccount * 100}%"></span></div><strong>${formatMoney(item.currentBalance)}</strong></div>`).join("") : emptyState("No accounts", "Add an account to compare balances.");
 }
 
 function renderChartRows(rows) {
@@ -485,17 +498,11 @@ function renderCategoryOptions() {
   setSelectOptions(els.budgetCategory, outcomes, "Choose category", els.budgetCategory.value);
 }
 
-function renderAccountOptions() {
-  [els.transactionAccount, els.transportAccount, els.recurringAccount].forEach((select) => setSelectOptions(select, state.accounts, "Choose account", select.value));
-}
-
 function renderFilterOptions() {
   setSelectOptions(els.filterCategory, state.categories, "All categories", els.filterCategory.value || "all", "all");
-  setSelectOptions(els.filterAccount, state.accounts, "All accounts", els.filterAccount.value || "all", "all");
 }
 
 function renderAnalyticsFilterOptions() {
-  setSelectOptions(els.analyticsAccount, state.accounts, "All accounts", els.analyticsAccount.value || "all", "all");
   setSelectOptions(els.analyticsCategory, state.categories, "All categories", els.analyticsCategory.value || "all", "all");
 }
 
@@ -512,7 +519,6 @@ function clearFilters() {
   els.searchInput.value = "";
   els.filterType.value = "all";
   els.filterCategory.value = "all";
-  els.filterAccount.value = "all";
   els.filterMonth.value = "";
   renderTransactions();
 }
@@ -568,7 +574,7 @@ function showView(viewId) {
   if (!VIEW_TITLES[viewId]) return;
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const moreViews = ["more", "categories", "accounts", "backup", "transport", "recurring", "planning", "analytics"];
+    const moreViews = ["more", "categories", "asset", "backup", "transport", "recurring", "planning", "analytics"];
     link.classList.toggle("active", link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId)));
   });
   els.viewTitle.textContent = VIEW_TITLES[viewId];

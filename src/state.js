@@ -5,22 +5,15 @@ export function createDefaultState() {
   const createdAt = new Date().toISOString();
   const categories = [
     ...["Salary", "Gift", "Bonus", "Other Income"].map((name) => ({ name, type: "income" })),
-    ...["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Other Outcome"]
+    ...["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Debt Payment", "Other Outcome"]
       .map((name) => ({ name, type: "outcome" }))
   ].map((category) => ({ id: createId(), ...category, createdAt }));
-
-  const accounts = [{
-    id: createId(),
-    name: "Asset",
-    initialBalance: 0,
-    kind: "asset",
-    createdAt
-  }];
 
   return {
     version: APP_VERSION,
     categories,
-    accounts,
+    asset: { initialBalance: 0, updatedAt: createdAt },
+    debts: [],
     transactions: [],
     transportRules: [],
     recurringRules: [],
@@ -46,13 +39,20 @@ export function sanitizeState(input) {
       createdAt: item.createdAt || new Date().toISOString()
     }));
 
-  const accounts = sourceAccounts
-    .filter((item) => item?.id && item?.name)
-    .map((item) => ({
+  const legacyDebtAccounts = sourceAccounts.filter((item) => item?.kind === "debt" || Number(item?.initialBalance) < 0);
+  const asset = {
+    initialBalance: input?.asset && Number.isFinite(Number(input.asset.initialBalance))
+      ? Number(input.asset.initialBalance)
+      : sourceAccounts.filter((item) => !legacyDebtAccounts.includes(item)).reduce((sum, item) => sum + (Number(item.initialBalance) || 0), 0),
+    updatedAt: input?.asset?.updatedAt || new Date().toISOString()
+  };
+
+  const debts = Array.isArray(input?.debts)
+    ? sanitizeList(input.debts, sanitizeDebt).filter((item) => item.name && item.originalAmount > 0)
+    : legacyDebtAccounts.map((item) => ({
       id: String(item.id),
       name: String(item.name).slice(0, 60),
-      initialBalance: Number(item.initialBalance) || 0,
-      kind: item.kind === "debt" ? "debt" : item.kind === "asset" ? "asset" : "legacy",
+      originalAmount: Math.abs(Number(item.initialBalance) || 0),
       createdAt: item.createdAt || new Date().toISOString()
     }));
 
@@ -67,10 +67,9 @@ export function sanitizeState(input) {
     returnFare: positiveNumber(item.returnFare),
     days: Math.max(1, Math.min(31, Math.trunc(Number(item.days) || 1))),
     month: /^\d{4}-\d{2}$/.test(item.month) ? item.month : todayString().slice(0, 7),
-    accountId: String(item.accountId || ""),
     categoryId: String(item.categoryId || ""),
     createdAt: item.createdAt || new Date().toISOString()
-  })).filter((item) => item.goFare + item.returnFare > 0 && item.accountId && item.categoryId);
+  })).filter((item) => item.goFare + item.returnFare > 0 && item.categoryId);
 
   const recurringRules = sanitizeList(input?.recurringRules, (item) => ({
     id: String(item.id),
@@ -79,11 +78,10 @@ export function sanitizeState(input) {
     amount: positiveNumber(item.amount),
     day: Math.max(1, Math.min(31, Math.trunc(Number(item.day) || 1))),
     startMonth: /^\d{4}-\d{2}$/.test(item.startMonth) ? item.startMonth : todayString().slice(0, 7),
-    accountId: String(item.accountId || ""),
     categoryId: String(item.categoryId || ""),
     active: item.active !== false,
     createdAt: item.createdAt || new Date().toISOString()
-  })).filter((item) => item.amount > 0 && item.accountId && item.categoryId);
+  })).filter((item) => item.amount > 0 && item.categoryId);
 
   const budgets = sanitizeList(input?.budgets, (item) => ({
     id: String(item.id),
@@ -104,8 +102,9 @@ export function sanitizeState(input) {
 
   return {
     version: APP_VERSION,
-    categories: categories.length ? categories : defaults.categories,
-    accounts: accounts.length ? accounts : defaults.accounts,
+    categories: ensureDebtCategory(categories.length ? categories : defaults.categories),
+    asset,
+    debts,
     transactions,
     transportRules,
     recurringRules,
@@ -118,6 +117,20 @@ function sanitizeList(value, mapper) {
   return (Array.isArray(value) ? value : [])
     .filter((item) => item?.id)
     .map(mapper);
+}
+
+function sanitizeDebt(item) {
+  return {
+    id: String(item.id),
+    name: String(item.name || "").slice(0, 60),
+    originalAmount: positiveNumber(item.originalAmount),
+    createdAt: item.createdAt || new Date().toISOString()
+  };
+}
+
+function ensureDebtCategory(categories) {
+  if (categories.some((item) => item.name.toLowerCase() === "debt payment" && item.type !== "income")) return categories;
+  return [...categories, { id: createId(), name: "Debt Payment", type: "outcome", createdAt: new Date().toISOString() }];
 }
 
 function positiveNumber(value) {
@@ -137,7 +150,7 @@ function sanitizeTransaction(item) {
   return {
     ...base,
     categoryId: item.categoryId ? String(item.categoryId) : "",
-    accountId: item.accountId ? String(item.accountId) : String(item.accessId || ""),
+    debtId: item.debtId ? String(item.debtId) : "",
     sourceType: item.sourceType ? String(item.sourceType) : "manual",
     sourceId: item.sourceId ? String(item.sourceId) : "",
     sourcePeriod: item.sourcePeriod ? String(item.sourcePeriod) : ""
@@ -149,11 +162,11 @@ export function validateImport(data) {
     throw new Error("File must contain a JSON object.");
   }
   if (!Array.isArray(data.categories)) throw new Error("categories must be an array.");
-  if (!Array.isArray(data.accounts) && !Array.isArray(data.accesses)) {
-    throw new Error("accounts must be an array.");
+  if (!data.asset && !Array.isArray(data.accounts) && !Array.isArray(data.accesses)) {
+    throw new Error("asset must be an object.");
   }
   if (!Array.isArray(data.transactions)) throw new Error("transactions must be an array.");
-  ["transportRules", "recurringRules", "budgets", "savingsGoals"].forEach((key) => {
+  ["debts", "transportRules", "recurringRules", "budgets", "savingsGoals"].forEach((key) => {
     if (key in data && !Array.isArray(data[key])) throw new Error(`${key} must be an array.`);
   });
 }

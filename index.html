@@ -31,7 +31,7 @@
           <button class="nav-link" data-view="recurring" type="button">Recurring</button>
           <button class="nav-link" data-view="planning" type="button">Planning</button>
           <button class="nav-link" data-view="categories" type="button">Categories</button>
-          <button class="nav-link" data-view="accounts" type="button">Accounts</button>
+          <button class="nav-link" data-view="asset" type="button">Asset & debts</button>
           <button class="nav-link" data-view="backup" type="button">Backup</button>
         </nav>
       </aside>
@@ -49,7 +49,7 @@
           <div class="balance-hero" aria-labelledby="dashboardTitle">
             <p id="dashboardTitle" class="hero-label">Current balance</p>
             <strong id="totalBalance">¥0</strong>
-            <span>Across all accounts</span>
+            <span>Available after income, expenses, and debt payments</span>
             <div class="month-chips" aria-label="Current month summary">
               <div class="month-chip">
                 <span>Income this month</span>
@@ -63,14 +63,6 @@
           </div>
 
           <button id="quickAddButton" class="button primary wide" type="button">+ Add transaction</button>
-
-          <section class="quiet-section" aria-labelledby="accountSummaryTitle">
-            <div class="section-row">
-              <h2 id="accountSummaryTitle">Account balances</h2>
-              <button class="text-link" data-view="accounts" type="button">Manage</button>
-            </div>
-            <div id="dashboardAccountSummary" class="finance-list"></div>
-          </section>
 
           <section class="quiet-section" aria-labelledby="recentTransactionsTitle">
             <div class="section-row">
@@ -111,10 +103,6 @@
                 Category
                 <select id="transactionCategory" required></select>
               </label>
-              <label>
-                Account
-                <select id="transactionAccount" required></select>
-              </label>
               <label class="full">
                 Note
                 <input id="transactionNote" type="text" maxlength="160" placeholder="Optional memo">
@@ -140,7 +128,7 @@
           <div class="filter-panel">
             <label>
               Search
-              <input id="searchInput" type="search" placeholder="Category, account, note">
+              <input id="searchInput" type="search" placeholder="Category, debt, note">
             </label>
             <div class="filter-grid">
               <label>
@@ -156,10 +144,6 @@
                 <select id="filterCategory"></select>
               </label>
               <label>
-                Account
-                <select id="filterAccount"></select>
-              </label>
-              <label>
                 Month
                 <input id="filterMonth" type="month">
               </label>
@@ -171,11 +155,10 @@
 
         <section id="analytics" class="view" aria-labelledby="analyticsTitle">
           <div class="section-row section-heading">
-            <div><h2 id="analyticsTitle">Financial analytics</h2><p>Understand income, spending, and account balances.</p></div>
+            <div><h2 id="analyticsTitle">Financial analytics</h2><p>Understand income, spending, and your asset balance.</p></div>
           </div>
           <div class="analytics-filters">
             <label class="compact-field">Month<input id="analyticsMonth" type="month"></label>
-            <label class="compact-field">Account<select id="analyticsAccount"></select></label>
             <label class="compact-field">Category<select id="analyticsCategory"></select></label>
           </div>
           <div class="metric-grid">
@@ -187,7 +170,6 @@
           <div class="analytics-grid">
             <section class="panel-card"><h3>Spending by category</h3><div id="analyticsCategories" class="chart-list"></div></section>
             <section class="panel-card"><h3>Six-month trend</h3><div id="analyticsTrend" class="chart-list"></div></section>
-            <section class="panel-card"><h3>Account balances</h3><div id="analyticsAccounts" class="chart-list"></div></section>
             <section class="panel-card"><h3>Daily spending</h3><div id="analyticsDaily" class="chart-list"></div></section>
             <section class="panel-card transport-metric"><span>Transport this month</span><strong id="analyticsTransport">¥0</strong></section>
           </div>
@@ -201,7 +183,6 @@
             <label>Return fare<input id="transportReturnFare" type="number" min="0" step="1" required></label>
             <label>Travel days<input id="transportDays" type="number" min="1" max="31" step="1" required></label>
             <label>Month<input id="transportMonth" type="month" required></label>
-            <label>Account<select id="transportAccount" required></select></label>
             <label>Category<select id="transportCategory" required></select></label>
             <div class="calculated-total"><span>Calculated total</span><strong id="transportPreview">¥0</strong></div>
             <button class="button primary" type="submit">Save transport plan</button>
@@ -217,7 +198,6 @@
             <label>Amount<input id="recurringAmount" type="number" min="1" step="1" required></label>
             <label>Day of month<input id="recurringDay" type="number" min="1" max="31" step="1" required></label>
             <label>Start month<input id="recurringStartMonth" type="month" required></label>
-            <label>Account<select id="recurringAccount" required></select></label>
             <label>Category<select id="recurringCategory" required></select></label>
             <button class="button primary" type="submit">Add recurring rule</button>
           </form>
@@ -254,7 +234,7 @@
         <section id="more" class="view" aria-labelledby="moreTitle">
           <div class="section-heading">
             <h2 id="moreTitle">More</h2>
-            <p>Manage setup, accounts, and local data.</p>
+            <p>Manage setup, your asset, debts, and local data.</p>
           </div>
           <div class="menu-list">
             <button class="menu-row" data-view="analytics" type="button"><span>Analytics</span><strong>Charts and monthly insights</strong></button>
@@ -265,9 +245,9 @@
               <span>Categories</span>
               <strong>Income and outcome labels</strong>
             </button>
-            <button class="menu-row" data-view="accounts" type="button">
-              <span>Accounts</span>
-              <strong>Cash, bank, cards, wallets</strong>
+            <button class="menu-row" data-view="asset" type="button">
+              <span>Asset & debts</span>
+              <strong>Balance, debts, and payments</strong>
             </button>
             <button class="menu-row" data-view="backup" type="button">
               <span>Backup</span>
@@ -318,23 +298,24 @@
           <div id="categoryList" class="finance-list"></div>
         </section>
 
-        <section id="accounts" class="view" aria-labelledby="accountsTitle">
+        <section id="asset" class="view" aria-labelledby="assetTitle">
           <div class="section-heading">
-            <h2 id="accountsTitle">Asset and debts</h2>
-            <p>Your main asset is created automatically. Add debts here when needed.</p>
+            <h2 id="assetTitle">Asset and debts</h2>
+            <p>Okane uses one asset balance. Debt payments are deducted from it automatically.</p>
           </div>
-          <form id="accountForm" class="management-form">
+          <form id="assetForm" class="management-form">
             <label>
-              Debt name
-              <input id="accountName" type="text" maxlength="60" placeholder="Credit card debt" required>
+              Opening asset balance
+              <input id="assetInitialBalance" type="number" step="1" required>
             </label>
-            <label>
-              Amount owed
-              <input id="accountInitialBalance" type="number" min="1" step="1" placeholder="0" required>
-            </label>
+            <button class="button primary" type="submit">Update asset</button>
+          </form>
+          <form id="debtForm" class="management-form">
+            <label>Debt name<input id="debtName" type="text" maxlength="60" placeholder="PayPay credit" required></label>
+            <label>Amount owed<input id="debtAmount" type="number" min="1" step="1" required></label>
             <button class="button primary" type="submit">Add debt</button>
           </form>
-          <div id="accountList" class="finance-list"></div>
+          <div id="debtList" class="finance-list"></div>
         </section>
 
         <section id="backup" class="view" aria-labelledby="backupTitle">
@@ -358,7 +339,7 @@
             </section>
             <section class="backup-card danger-zone">
               <h3>Reset data</h3>
-              <p>Clear all saved local data and restore default categories and accounts.</p>
+              <p>Clear all saved local data and restore the default asset and categories.</p>
               <button id="resetButton" class="button danger wide" type="button">Reset all data</button>
             </section>
           </div>

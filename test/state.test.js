@@ -7,11 +7,12 @@ test("migrates legacy accesses and accessId fields", () => {
   const migrated = sanitizeState({
     version: "1.0.0",
     categories: [{ id: "food", name: "Food", type: "outcome" }],
-    accesses: [{ id: "cash", name: "Cash", initialBalance: 100 }],
+    accesses: [{ id: "cash", name: "Cash", initialBalance: 100 }, { id: "debt", name: "Debt", initialBalance: -200 }],
     transactions: [{ id: "tx", type: "outcome", amount: 25, categoryId: "food", accessId: "cash", date: "2026-10-19" }]
   });
-  assert.equal(migrated.accounts[0].id, "cash");
-  assert.equal(migrated.transactions[0].accountId, "cash");
+  assert.equal(migrated.asset.initialBalance, 100);
+  assert.equal(migrated.debts[0].originalAmount, 200);
+  assert.equal("accountId" in migrated.transactions[0], false);
   assert.equal("accesses" in migrated, false);
 });
 
@@ -30,10 +31,10 @@ test("formats a local calendar date and rejects rollover dates", () => {
   assert.equal(isValidDate("2024-02-29"), true);
 });
 
-test("new users start with one asset account", () => {
+test("new users start with one asset and no accounts", () => {
   const state = sanitizeState({ categories: [], accounts: [], transactions: [] });
-  assert.equal(state.accounts.length, 1);
-  assert.equal(state.accounts[0].name, "Asset");
-  assert.equal(state.accounts[0].kind, "asset");
+  assert.equal(state.asset.initialBalance, 0);
+  assert.deepEqual(state.debts, []);
+  assert.equal("accounts" in state, false);
 });
 

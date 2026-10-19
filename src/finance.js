@@ -20,27 +20,18 @@ export function calculateTotals(state, currentDate = todayString()) {
   });
 }
 
-export function calculateAccountSummaries(state) {
-  const totalsByAccount = new Map(state.accounts.map((account) => [
-    account.id,
-    { totalIncome: 0, totalOutcome: 0 }
-  ]));
+export function calculateAssetBalance(state) {
+  return state.transactions.reduce((balance, transaction) =>
+    balance + (transaction.type === "income" ? transaction.amount : -transaction.amount),
+  Number(state.asset?.initialBalance) || 0);
+}
 
-  state.transactions.forEach((transaction) => {
-    const totals = totalsByAccount.get(transaction.accountId);
-    if (!totals) return;
-    totals[transaction.type === "income" ? "totalIncome" : "totalOutcome"] += transaction.amount;
-  });
-
-  return state.accounts.map((account) => {
-    const initialBalance = Number(account.initialBalance) || 0;
-    const totals = totalsByAccount.get(account.id);
-    return {
-      ...account,
-      initialBalance,
-      ...totals,
-      currentBalance: initialBalance + totals.totalIncome - totals.totalOutcome
-    };
+export function calculateDebtSummaries(state) {
+  return state.debts.map((debt) => {
+    const paid = state.transactions
+      .filter((item) => item.type === "outcome" && item.debtId === debt.id)
+      .reduce((sum, item) => sum + item.amount, 0);
+    return { ...debt, paid, remaining: Math.max(0, debt.originalAmount - paid) };
   });
 }
 
@@ -55,13 +46,12 @@ export function filterTransactions(state, filters) {
   return sortTransactions(state.transactions)
     .filter((item) => filters.type === "all" || item.type === filters.type)
     .filter((item) => filters.categoryId === "all" || item.categoryId === filters.categoryId)
-    .filter((item) => filters.accountId === "all" || item.accountId === filters.accountId)
     .filter((item) => !filters.month || item.date.slice(0, 7) === filters.month)
     .filter((item) => {
       if (!search) return true;
       const category = state.categories.find(({ id }) => id === item.categoryId)?.name || "";
-      const account = state.accounts.find(({ id }) => id === item.accountId)?.name || "";
-      return [category, account, item.note, item.date].join(" ").toLowerCase().includes(search);
+      const debt = state.debts.find(({ id }) => id === item.debtId)?.name || "";
+      return [category, debt, item.note, item.date].join(" ").toLowerCase().includes(search);
     });
 }
 
