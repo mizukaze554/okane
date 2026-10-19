@@ -33,10 +33,10 @@ test("automation is idempotent and skips weekdays not selected",()=>{
  const transport=state.categories.find(c=>c.name==="Transport").id;
  state.transportRules.push({id:"commute",name:"Work",outboundFare:200,returnFare:300,
  workDays:20,mode:"daily",weekdays:[1,2,3,4,5],startDate:"2026-10-12",active:true,excludedDates:["2026-10-13"],categoryId:transport});
- assert.equal(produceAutomations(state,"2026-10-19"),4);
- assert.equal(balance(state),-2000);
+ assert.equal(produceAutomations(state,"2026-10-19"),5);
+ assert.equal(balance(state),-2500);
  assert.equal(produceAutomations(state,"2026-10-19"),0);
- assert.equal(state.transactions.length,4);
+ assert.equal(state.transactions.length,5);
 });
 test("recurring entries are not duplicated, monthly handles shorter months",()=>{
  const state=initialState();
