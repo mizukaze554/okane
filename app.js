@@ -187,7 +187,8 @@ function addAccount(event) {
 
 function deleteAccount(id) {
   const account = state.accounts.find((item) => item.id === id);
-  if (account?.kind === "asset") return showToast("The main asset cannot be deleted.");
+  const assetCount = state.accounts.filter((item) => item.kind !== "debt").length;
+  if (account?.kind !== "debt" && assetCount <= 1) return showToast("The final asset cannot be deleted.");
   const used = state.transactions.some((item) => item.accountId === id) ||
     state.transportRules.some((item) => item.accountId === id) || state.recurringRules.some((item) => item.accountId === id);
   if (used) return showToast("Account is in use and cannot be deleted.");
