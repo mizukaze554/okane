@@ -169,8 +169,9 @@
           </div>
           <div class="analytics-grid">
             <section class="panel-card"><h3>Spending by category</h3><div id="analyticsCategories" class="chart-list"></div></section>
-            <section class="panel-card"><h3>Six-month trend</h3><div id="analyticsTrend" class="chart-list"></div></section>
+            <section class="panel-card"><div class="chart-heading"><h3>Six-month trend</h3><div class="chart-legend"><span class="income-key">Income</span><span class="outcome-key">Expense</span></div></div><div id="analyticsTrend" class="chart-list" aria-label="Six-month income and expense chart"></div></section>
             <section class="panel-card"><h3>Daily spending</h3><div id="analyticsDaily" class="chart-list"></div></section>
+            <section class="panel-card insights-card"><h3>Monthly insights</h3><div id="analyticsInsights" class="insight-list"></div></section>
             <section class="panel-card transport-metric"><span>Transport this month</span><strong id="analyticsTransport">¥0</strong></section>
           </div>
         </section>
@@ -263,6 +264,11 @@
               <button class="theme-option" data-theme-choice="dark" type="button">Dark</button>
             </div>
           </section>
+          <section id="installCard" class="theme-card" aria-labelledby="installTitle" hidden>
+            <h3 id="installTitle">Install Okane</h3>
+            <p>Add Okane to this device for a full-screen, offline app experience.</p>
+            <button id="installButton" class="button primary wide" type="button">Install app</button>
+          </section>
           <section class="about-card" aria-labelledby="aboutTitle">
             <h3 id="aboutTitle">About Okane</h3>
             <p>Okane is a minimal offline-first finance control app for quick daily recording and clear balance checking.</p>
@@ -303,10 +309,19 @@
             <h2 id="assetTitle">Asset and debts</h2>
             <p>Okane uses one asset balance. Debt payments are deducted from it automatically.</p>
           </div>
+          <div class="metric-grid asset-summary" aria-label="Asset and debt summary">
+            <article class="metric-card"><span>Available asset</span><strong id="assetCurrentBalance">¥0</strong></article>
+            <article class="metric-card"><span>Debt remaining</span><strong id="assetDebtTotal">¥0</strong></article>
+            <article class="metric-card"><span>Net position</span><strong id="assetNetPosition">¥0</strong></article>
+          </div>
           <form id="assetForm" class="management-form">
             <label>
               Opening asset balance
               <input id="assetInitialBalance" type="number" step="1" required>
+            </label>
+            <label>
+              Change note
+              <input id="assetChangeNote" type="text" maxlength="120" placeholder="Balance correction">
             </label>
             <button class="button primary" type="submit">Update asset</button>
           </form>
@@ -316,6 +331,10 @@
             <button class="button primary" type="submit">Add debt</button>
           </form>
           <div id="debtList" class="finance-list"></div>
+          <section class="quiet-section" aria-labelledby="assetHistoryTitle">
+            <div class="section-row"><h2 id="assetHistoryTitle">Balance change history</h2></div>
+            <div id="assetHistoryList" class="finance-list"></div>
+          </section>
         </section>
 
         <section id="backup" class="view" aria-labelledby="backupTitle">
@@ -343,6 +362,10 @@
               <button id="resetButton" class="button danger wide" type="button">Reset all data</button>
             </section>
           </div>
+          <section class="snapshot-card" aria-labelledby="snapshotTitle">
+            <div class="section-row"><div><h2 id="snapshotTitle">Local recovery</h2><p>Okane keeps up to eight automatic snapshots on this device.</p></div><button id="clearSnapshotsButton" class="delete-link" type="button">Clear snapshots</button></div>
+            <div id="snapshotList" class="finance-list"></div>
+          </section>
           <div id="backupStatus" class="status-box" role="status" aria-live="polite"></div>
         </section>
       </main>
@@ -354,6 +377,16 @@
       <button class="nav-link" data-view="transactions" type="button"><span>List</span></button>
       <button class="nav-link" data-view="more" type="button"><span>More</span></button>
     </nav>
+
+    <dialog id="amountDialog" class="amount-dialog" aria-labelledby="amountDialogTitle">
+      <form id="amountDialogForm" method="dialog">
+        <div class="dialog-heading"><div><p class="eyebrow">Okane</p><h2 id="amountDialogTitle">Enter amount</h2></div><button id="amountDialogClose" class="dialog-close" type="button" aria-label="Close dialog">×</button></div>
+        <p id="amountDialogDescription" class="dialog-description"></p>
+        <label id="amountDialogField">Amount<input id="amountDialogAmount" type="number" step="1" inputmode="numeric" required></label>
+        <label id="amountDialogDateField">Payment date<input id="amountDialogDate" type="date" required></label>
+        <div class="dialog-actions"><button id="amountDialogCancel" class="button ghost" type="button">Cancel</button><button id="amountDialogSubmit" class="button primary" type="submit">Save</button></div>
+      </form>
+    </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMessage"></span><button id="toastAction" type="button" hidden></button></div>
     <script src="app.js" type="module"></script>

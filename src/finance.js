@@ -35,6 +35,10 @@ export function calculateDebtSummaries(state) {
   });
 }
 
+export function calculateDebtTotal(state) {
+  return calculateDebtSummaries(state).reduce((total, debt) => total + debt.remaining, 0);
+}
+
 export function sortTransactions(transactions) {
   return [...transactions].sort((a, b) =>
     `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`)

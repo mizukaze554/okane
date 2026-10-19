@@ -1,16 +1,19 @@
 import { buildAnalytics, buildMonthlyTrend } from "./src/analytics.js";
 import { createTransportTransaction, generateDueRecurring, transportTotal } from "./src/automation.js";
-import { APP_VERSION, THEME_KEY, VIEW_TITLES } from "./src/config.js";
-import { calculateAssetBalance, calculateDebtSummaries, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
+import { APP_VERSION, LAST_EXPORT_KEY, THEME_KEY, VIEW_TITLES } from "./src/config.js";
+import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, categorySpending, filterTransactions, sortTransactions } from "./src/finance.js";
 import { emptyState, transactionCard } from "./src/render.js";
 import { createDefaultState, sanitizeState, StateStore, validateImport } from "./src/state.js";
 import { capitalize, createId, escapeHtml, formatMoney, isValidDate, todayString } from "./src/utils.js";
 
 const store = new StateStore();
 let state = store.load();
+store.save(state);
 let editingTransactionId = null;
 let deletedTransaction = null;
 let toastTimer = null;
+let amountDialogAction = null;
+let installPromptEvent = null;
 const els = {};
 
 applyStoredTheme();
@@ -22,6 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
   runRecurringAutomation();
   updateNetworkStatus();
   renderAll();
+  const requestedView = new URLSearchParams(location.search).get("view");
+  if (requestedView && VIEW_TITLES[requestedView]) showView(requestedView);
   registerServiceWorker();
 });
 
@@ -62,12 +67,30 @@ function bindEvents() {
   els.exportButton.addEventListener("click", exportData);
   els.importFile.addEventListener("change", importData);
   els.resetButton.addEventListener("click", resetData);
+  els.clearSnapshotsButton.addEventListener("click", clearSnapshots);
+  els.installButton.addEventListener("click", installApp);
+  els.amountDialogForm.addEventListener("submit", submitAmountDialog);
+  els.amountDialogCancel.addEventListener("click", closeAmountDialog);
+  els.amountDialogClose.addEventListener("click", closeAmountDialog);
+  els.amountDialog.addEventListener("click", (event) => {
+    if (event.target === els.amountDialog) closeAmountDialog();
+  });
   window.addEventListener("online", updateNetworkStatus);
   window.addEventListener("offline", updateNetworkStatus);
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPromptEvent = event;
+    els.installCard.hidden = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    installPromptEvent = null;
+    els.installCard.hidden = true;
+    showToast("Okane installed.");
+  });
 }
 
 function commit(message) {
-  store.save(state);
+  store.save(state, { snapshot: true });
   renderAll();
   showToast(message);
 }
@@ -175,7 +198,18 @@ function updateAsset(event) {
   event.preventDefault();
   const initialBalance = Number(els.assetInitialBalance.value);
   if (!Number.isFinite(initialBalance)) return showToast("Enter a valid asset balance.");
-  state.asset = { initialBalance, updatedAt: new Date().toISOString() };
+  const previousBalance = Number(state.asset.initialBalance) || 0;
+  if (initialBalance === previousBalance) return showToast("Opening balance is unchanged.");
+  const createdAt = new Date().toISOString();
+  state.asset = {
+    initialBalance,
+    updatedAt: createdAt,
+    history: [{
+      id: createId(), previousBalance, newBalance: initialBalance,
+      note: els.assetChangeNote.value.trim() || "Opening balance updated", createdAt
+    }, ...(state.asset.history || [])].slice(0, 50)
+  };
+  els.assetChangeNote.value = "";
   commit("Asset balance updated.");
 }
 
@@ -194,15 +228,27 @@ function payDebt(id) {
   const debt = calculateDebtSummaries(state).find((item) => item.id === id);
   if (!debt || debt.remaining <= 0) return;
   const available = calculateAssetBalance(state);
-  const amount = Number(prompt(`Payment amount for ${debt.name}:`, String(Math.min(debt.remaining, Math.max(0, available)))));
-  if (!positiveAmount(amount)) return;
+  if (available <= 0) return showToast("There is no available asset balance for a payment.");
+  openAmountDialog({
+    type: "debt", id, title: `Pay ${debt.name}`,
+    description: `${formatMoney(debt.remaining)} remaining · ${formatMoney(available)} available`,
+    label: "Payment amount", value: Math.min(debt.remaining, available), min: 1,
+    max: Math.min(debt.remaining, available), showDate: true, submitLabel: "Record payment"
+  });
+}
+
+function recordDebtPayment(id, amount, date) {
+  const debt = calculateDebtSummaries(state).find((item) => item.id === id);
+  const available = calculateAssetBalance(state);
+  if (!debt || !positiveAmount(amount)) return;
   if (amount > debt.remaining) return showToast("Payment exceeds the remaining debt.");
   if (amount > available) return showToast("Not enough asset balance for this payment.");
+  if (!isValidDate(date)) return showToast("Enter a valid payment date.");
   const category = state.categories.find((item) => item.name.toLowerCase() === "debt payment" && item.type !== "income");
   if (!category) return showToast("Debt Payment category is missing. Reload the app to restore it.");
   state.transactions.unshift({
     id: createId(), type: "outcome", amount, categoryId: category.id, debtId: debt.id,
-    note: `Payment to ${debt.name}`, date: todayString(), sourceType: "debt", sourceId: debt.id,
+    note: `Payment to ${debt.name}`, date, sourceType: "debt", sourceId: debt.id,
     sourcePeriod: "", createdAt: new Date().toISOString()
   });
   commit("Debt payment recorded.");
@@ -252,6 +298,17 @@ function recordTransport(id) {
 function deleteTransport(id) {
   state.transportRules = state.transportRules.filter((item) => item.id !== id);
   commit("Transport plan deleted. Existing expense remains.");
+}
+
+function copyTransportToNextMonth(id) {
+  const rule = state.transportRules.find((item) => item.id === id);
+  if (!rule) return;
+  const nextMonth = shiftMonth(rule.month, 1);
+  if (state.transportRules.some((item) => item.name.toLowerCase() === rule.name.toLowerCase() && item.month === nextMonth)) {
+    return showToast("A matching plan already exists for next month.");
+  }
+  state.transportRules.unshift({ ...rule, id: createId(), month: nextMonth, createdAt: new Date().toISOString() });
+  commit(`Transport plan copied to ${nextMonth}.`);
 }
 
 function addRecurringRule(event) {
@@ -329,9 +386,18 @@ function addSavingsGoal(event) {
 function contributeToGoal(id) {
   const goal = state.savingsGoals.find((item) => item.id === id);
   if (!goal) return;
-  const amount = Number(prompt("Amount to add (use a negative amount to correct the total):", "0"));
-  if (!Number.isFinite(amount) || amount === 0) return;
-  goal.savedAmount = Math.max(0, goal.savedAmount + amount);
+  openAmountDialog({
+    type: "savings", id, title: `Update ${goal.name}`,
+    description: `${formatMoney(goal.savedAmount)} saved toward ${formatMoney(goal.targetAmount)}`,
+    label: "Total saved amount", value: goal.savedAmount, min: 0,
+    showDate: false, submitLabel: "Update progress"
+  });
+}
+
+function updateSavingsProgress(id, amount) {
+  const goal = state.savingsGoals.find((item) => item.id === id);
+  if (!goal || !Number.isFinite(amount) || amount < 0) return showToast("Enter a valid saved amount.");
+  goal.savedAmount = amount;
   commit("Savings progress updated.");
 }
 
@@ -355,6 +421,7 @@ function renderAll() {
   renderRecurring();
   renderAnalytics();
   renderPlanning();
+  renderSnapshots();
 }
 
 function renderDashboard() {
@@ -400,6 +467,11 @@ function renderCategories() {
 function renderAssetAndDebts() {
   els.assetInitialBalance.value = state.asset.initialBalance;
   const debts = calculateDebtSummaries(state);
+  const assetBalance = calculateAssetBalance(state);
+  const debtTotal = calculateDebtTotal(state);
+  els.assetCurrentBalance.textContent = formatMoney(assetBalance);
+  els.assetDebtTotal.textContent = formatMoney(debtTotal);
+  els.assetNetPosition.textContent = formatMoney(assetBalance - debtTotal);
   els.debtList.innerHTML = debts.length ? debts.map((debt) => {
     const percentage = Math.min(100, debt.paid / debt.originalAmount * 100);
     return `<article class="goal-row"><div class="goal-head"><p>${escapeHtml(debt.name)}</p><button class="delete-link" data-delete-debt="${escapeHtml(debt.id)}" type="button">Delete</button></div>
@@ -409,6 +481,12 @@ function renderAssetAndDebts() {
   }).join("") : emptyState("No debts", "Add a debt when you need to track money owed.");
   bindDataAction(els.debtList, "pay-debt", payDebt);
   bindDataAction(els.debtList, "delete-debt", deleteDebt);
+  const history = state.asset.history || [];
+  els.assetHistoryList.innerHTML = history.length ? history.map((item) => `
+    <article class="finance-row"><div class="row-main"><p class="row-title">${escapeHtml(item.note)}</p>
+    <p class="row-sub">${formatMoney(item.previousBalance)} → ${formatMoney(item.newBalance)}</p></div>
+    <time class="row-detail" datetime="${escapeHtml(item.createdAt)}">${formatDateTime(item.createdAt)}</time></article>`).join("") :
+    emptyState("No balance changes", "Future opening-balance updates will appear here.");
 }
 
 function renderTransportPreview() {
@@ -423,9 +501,11 @@ function renderTransport() {
       <p class="row-sub">Going ${formatMoney(rule.goFare)} + return ${formatMoney(rule.returnFare)} × ${rule.days} days</p></div>
       <div class="row-side"><div class="amount">${formatMoney(transportTotal(rule))}</div><div class="inline-actions">
       <button class="button ghost small-button" data-record-transport="${escapeHtml(rule.id)}" type="button" ${recorded ? "disabled" : ""}>${recorded ? "Recorded" : "Record"}</button>
+      <button class="button ghost small-button" data-copy-transport="${escapeHtml(rule.id)}" type="button">Next month</button>
       <button class="delete-link" data-delete-transport="${escapeHtml(rule.id)}" type="button">Delete</button></div></div></article>`;
   }).join("") : emptyState("No transport plans", "Add going fare, return fare, and travel days.");
   bindDataAction(els.transportList, "record-transport", recordTransport);
+  bindDataAction(els.transportList, "copy-transport", copyTransportToNextMonth);
   bindDataAction(els.transportList, "delete-transport", deleteTransport);
 }
 
@@ -452,7 +532,29 @@ function renderAnalytics() {
   els.analyticsDaily.innerHTML = analytics.dailyRows.length ? analytics.dailyRows.map((item) => `<div class="chart-row"><span>${item.date.slice(5)}</span><div class="chart-bar"><span class="outcome-bar" style="--value:${item.amount / maxDaily * 100}%"></span></div><strong>${formatMoney(item.amount)}</strong></div>`).join("") : emptyState("No daily spending", "No expenses match these filters.");
   const trend = buildMonthlyTrend(state, month);
   const maxTrend = Math.max(...trend.map((item) => Math.max(item.income, item.outcome)), 1);
-  els.analyticsTrend.innerHTML = trend.map((item) => `<div class="chart-row"><span>${item.month}</span><div class="chart-bar"><span class="outcome-bar" style="--value:${item.outcome / maxTrend * 100}%"></span></div><strong>${formatMoney(item.outcome)}</strong></div>`).join("");
+  els.analyticsTrend.innerHTML = trend.map((item) => `<div class="trend-row" aria-label="${item.month}: income ${formatMoney(item.income)}, expenses ${formatMoney(item.outcome)}"><span>${item.month.slice(5)}</span><div class="trend-bars"><span class="income-bar" style="--value:${item.income / maxTrend * 100}%"></span><span class="outcome-bar" style="--value:${item.outcome / maxTrend * 100}%"></span></div><strong>${formatMoney(item.net ?? item.income - item.outcome)}</strong></div>`).join("");
+  renderAnalyticsInsights(month, analytics);
+}
+
+function renderAnalyticsInsights(month, analytics) {
+  const previous = buildAnalytics(state, shiftMonth(month, -1), { categoryId: els.analyticsCategory.value });
+  const expenseChange = previous.outcome ? (analytics.outcome - previous.outcome) / previous.outcome * 100 : null;
+  const savingsRate = analytics.income ? analytics.net / analytics.income * 100 : null;
+  const topCategory = analytics.categoryRows[0];
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const latestDay = analytics.dailyRows.length ? Math.max(...analytics.dailyRows.map((item) => Number(item.date.slice(8)))) : 0;
+  const currentMonth = todayString().slice(0, 7);
+  const projection = month === currentMonth && latestDay ? analytics.outcome / latestDay * daysInMonth : 0;
+  const insights = [
+    expenseChange === null ? "Add last month’s spending to see a comparison." :
+      `Expenses are ${Math.abs(expenseChange).toFixed(0)}% ${expenseChange > 0 ? "higher" : expenseChange < 0 ? "lower" : "unchanged"} than last month.`,
+    savingsRate === null ? "No income is recorded for this month." : `Savings rate is ${savingsRate.toFixed(0)}% of recorded income.`,
+    topCategory ? `${topCategory.name} is the largest expense at ${topCategory.percentage.toFixed(0)}%.` : "No expense category leads this month.",
+    month !== currentMonth ? `This month closed with ${formatMoney(analytics.outcome)} in recorded expenses.` :
+      projection ? `At the current pace, projected monthly expenses are ${formatMoney(projection)}.` : "Record spending to see a monthly projection."
+  ];
+  els.analyticsInsights.innerHTML = insights.map((insight) => `<p>${escapeHtml(insight)}</p>`).join("");
 }
 
 function renderChartRows(rows) {
@@ -478,6 +580,22 @@ function renderPlanning() {
   }).join("") : emptyState("No savings goals", "Add a target and track progress.");
   bindDataAction(els.savingsList, "contribute-goal", contributeToGoal);
   bindDataAction(els.savingsList, "delete-goal", deleteSavingsGoal);
+}
+
+function renderSnapshots() {
+  const snapshots = store.getSnapshots();
+  els.clearSnapshotsButton.disabled = snapshots.length === 0;
+  els.snapshotList.innerHTML = snapshots.length ? snapshots.map((snapshot) => {
+    const transactionCount = Array.isArray(snapshot.state?.transactions) ? snapshot.state.transactions.length : 0;
+    return `<article class="finance-row"><div class="row-main"><p class="row-title">Automatic snapshot</p>
+      <p class="row-sub">${transactionCount} transactions · ${formatDateTime(snapshot.createdAt)}</p></div>
+      <button class="button ghost small-button" data-restore-snapshot="${escapeHtml(snapshot.id)}" type="button">Restore</button></article>`;
+  }).join("") : emptyState("No local snapshots yet", "A snapshot is created before your next saved change.");
+  bindDataAction(els.snapshotList, "restore-snapshot", restoreSnapshot);
+  const lastExport = localStorage.getItem(LAST_EXPORT_KEY);
+  if (lastExport && !els.backupStatus.classList.contains("active")) {
+    setBackupStatus(`Last JSON export: ${formatDateTime(lastExport)}`);
+  }
 }
 
 function renderTransactionCategoryOptions() {
@@ -531,8 +649,37 @@ function exportData() {
   link.download = `okane-${todayString()}.json`;
   link.click();
   URL.revokeObjectURL(url);
-  setBackupStatus("Exported current local data.");
+  localStorage.setItem(LAST_EXPORT_KEY, payload.exportedAt);
+  setBackupStatus(`Exported current local data at ${formatDateTime(payload.exportedAt)}.`);
   showToast("Export ready.");
+}
+
+function restoreSnapshot(id) {
+  if (!confirm("Restore this local snapshot? Your current data will be kept as a new recovery snapshot.")) return;
+  try {
+    state = store.restoreSnapshot(id);
+    setDefaults();
+    commit("Local snapshot restored.");
+    setBackupStatus("Recovery snapshot restored successfully.");
+  } catch (error) {
+    setBackupStatus(`Restore failed: ${error.message}`);
+    showToast("Snapshot restore failed.");
+  }
+}
+
+function clearSnapshots() {
+  if (!confirm("Clear all automatic local snapshots? Exported JSON files are not affected.")) return;
+  store.clearSnapshots();
+  renderSnapshots();
+  showToast("Local snapshots cleared.");
+}
+
+async function installApp() {
+  if (!installPromptEvent) return;
+  installPromptEvent.prompt();
+  await installPromptEvent.userChoice;
+  installPromptEvent = null;
+  els.installCard.hidden = true;
 }
 
 function importData(event) {
@@ -578,6 +725,7 @@ function showView(viewId) {
     link.classList.toggle("active", link.dataset.view === viewId || (link.dataset.view === "more" && moreViews.includes(viewId)));
   });
   els.viewTitle.textContent = VIEW_TITLES[viewId];
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setDefaults() {
@@ -596,6 +744,49 @@ function setFeatureDefaults() {
 }
 
 function positiveAmount(value) { return Number.isFinite(value) && value > 0; }
+function openAmountDialog(options) {
+  amountDialogAction = options;
+  els.amountDialogTitle.textContent = options.title;
+  els.amountDialogDescription.textContent = options.description;
+  els.amountDialogField.firstChild.textContent = options.label;
+  els.amountDialogAmount.value = String(options.value);
+  els.amountDialogAmount.min = String(options.min ?? 0);
+  if (Number.isFinite(options.max)) els.amountDialogAmount.max = String(options.max);
+  else els.amountDialogAmount.removeAttribute("max");
+  els.amountDialogDateField.hidden = !options.showDate;
+  els.amountDialogDate.required = Boolean(options.showDate);
+  els.amountDialogDate.value = todayString();
+  els.amountDialogSubmit.textContent = options.submitLabel || "Save";
+  els.amountDialog.showModal();
+  requestAnimationFrame(() => els.amountDialogAmount.select());
+}
+function closeAmountDialog() {
+  amountDialogAction = null;
+  els.amountDialog.close();
+}
+function submitAmountDialog(event) {
+  event.preventDefault();
+  if (!amountDialogAction) return closeAmountDialog();
+  const action = amountDialogAction;
+  const amount = Number(els.amountDialogAmount.value);
+  if (!Number.isFinite(amount) || amount < Number(action.min ?? 0) || (Number.isFinite(action.max) && amount > action.max)) {
+    return showToast("Enter an amount within the allowed range.");
+  }
+  closeAmountDialog();
+  if (action.type === "debt") recordDebtPayment(action.id, amount, els.amountDialogDate.value);
+  if (action.type === "savings") updateSavingsProgress(action.id, amount);
+}
+function shiftMonth(month, offset) {
+  const [year, value] = month.split("-").map(Number);
+  const date = new Date(year, value - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+function formatDateTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown time" : new Intl.DateTimeFormat("en", {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+  }).format(date);
+}
 function applyStoredTheme() { applyTheme(localStorage.getItem(THEME_KEY) || "auto"); }
 function setThemePreference(theme) {
   if (!["auto", "light", "dark"].includes(theme)) return;
@@ -625,7 +816,10 @@ function showToast(message, actionLabel = "", action = null) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => els.toast.classList.remove("show"), action ? 6000 : 2800);
 }
-function updateNetworkStatus() { els.networkStatus.textContent = navigator.onLine ? "Online" : "Offline"; }
+function updateNetworkStatus() {
+  els.networkStatus.textContent = navigator.onLine ? "Online · local" : "Offline · ready";
+  els.networkStatus.classList.toggle("is-offline", !navigator.onLine);
+}
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch((error) => console.error("Service worker registration failed", error));

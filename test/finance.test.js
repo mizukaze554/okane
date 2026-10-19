@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateAssetBalance, calculateDebtSummaries, calculateTotals, filterTransactions } from "../src/finance.js";
+import { calculateAssetBalance, calculateDebtSummaries, calculateDebtTotal, calculateTotals, filterTransactions } from "../src/finance.js";
 
 const state = {
   asset: { initialBalance: 1500 },
@@ -30,6 +30,7 @@ test("calculates all-time and current-month totals", () => {
 test("calculates the single asset and remaining debts", () => {
   assert.equal(calculateAssetBalance(state), 2850);
   assert.deepEqual(calculateDebtSummaries(state).map(({ paid, remaining }) => ({ paid, remaining })), [{ paid: 250, remaining: 750 }]);
+  assert.equal(calculateDebtTotal(state), 750);
 });
 
 test("filters using type and free text", () => {

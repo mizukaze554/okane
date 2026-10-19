@@ -12,11 +12,14 @@ Developed by [Nerdhook](https://nerdhook.site/), a software development organiza
 - Monthly transport plans with going and return fare calculation
 - Recurring monthly income and expense automation
 - Analytics for cash flow, categories, trends, daily spending, and transport
+- Monthly comparisons, spending projection, and paired income/expense graphs
 - Monthly category budgets and savings goals
 - Category management
 - One JPY asset balance with user-managed debts and debt payments
+- Audited opening-balance changes and net-position summaries
 - Local-only data storage with `localStorage`
 - Export and import all data as JSON
+- Automatic rolling local recovery snapshots
 - Reset local data with confirmation
 - Offline support through a service worker
 - Installable PWA
@@ -33,6 +36,8 @@ Developed by [Nerdhook](https://nerdhook.site/), a software development organiza
 - Browser `localStorage`
 
 No frameworks, backend, build tools, or external CDN dependencies are required.
+There is no authentication, cloud account, tracking service, or network API. The
+browser on the current device is the complete application and data store.
 
 ## Project Structure
 
@@ -88,6 +93,11 @@ Use the Backup page to:
 - Export JSON backup files
 - Import JSON backup files
 - Reset all local app data
+- Restore one of up to eight automatic on-device snapshots
+
+Local snapshots help recover an accidental edit, but they live in the same
+browser storage. Export JSON regularly for a backup that survives cleared site
+data or a lost device.
 
 ## Development
 

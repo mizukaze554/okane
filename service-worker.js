@@ -1,4 +1,4 @@
-const CACHE_NAME = "okane-v9";
+const CACHE_NAME = "okane-v10";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,7 +14,8 @@ const ASSETS = [
   "./manifest.json",
   "./icon.svg",
   "./icon-192.svg",
-  "./icon-512.svg"
+  "./icon-512.svg",
+  "./robots.txt"
 ];
 
 self.addEventListener("install", (event) => {

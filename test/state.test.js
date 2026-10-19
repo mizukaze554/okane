@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeState, validateImport } from "../src/state.js";
+import { sanitizeState, StateStore, validateImport } from "../src/state.js";
 import { isValidDate, todayString } from "../src/utils.js";
 
 test("migrates legacy accesses and accessId fields", () => {
@@ -36,5 +36,33 @@ test("new users start with one asset and no accounts", () => {
   assert.equal(state.asset.initialBalance, 0);
   assert.deepEqual(state.debts, []);
   assert.equal("accounts" in state, false);
+});
+
+test("keeps and restores local recovery snapshots", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
+  };
+  const store = new StateStore(storage);
+  const first = sanitizeState({ categories: [], accounts: [], transactions: [] });
+  first.asset.initialBalance = 100;
+  store.save(first);
+  const second = structuredClone(first);
+  second.asset.initialBalance = 250;
+  store.save(second, { snapshot: true });
+  const snapshots = store.getSnapshots();
+  assert.equal(snapshots.length, 1);
+  assert.equal(store.restoreSnapshot(snapshots[0].id).asset.initialBalance, 100);
+});
+
+test("sanitizes asset balance history", () => {
+  const state = sanitizeState({
+    categories: [], asset: { initialBalance: 20, history: [{ id: "h", previousBalance: 0, newBalance: 20, note: "First count" }] }, transactions: []
+  });
+  assert.deepEqual(state.asset.history.map(({ previousBalance, newBalance, note }) => ({ previousBalance, newBalance, note })), [
+    { previousBalance: 0, newBalance: 20, note: "First count" }
+  ]);
 });
 

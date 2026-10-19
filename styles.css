@@ -2,7 +2,7 @@
   --bg: #f5f5f3;
   --surface: #ffffff;
   --text: #080808;
-  --muted: #717171;
+  --muted: #666666;
   --line: #e5e5e0;
   --soft: #f0f0ec;
   --black: #000000;
@@ -50,7 +50,7 @@
   --bg: #f5f5f3;
   --surface: #ffffff;
   --text: #080808;
-  --muted: #717171;
+  --muted: #666666;
   --line: #e5e5e0;
   --soft: #f0f0ec;
   --black: #000000;
@@ -158,6 +158,10 @@ h3 {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.offline-badge.is-offline {
+  color: var(--good);
 }
 
 .view {
@@ -620,6 +624,43 @@ button:focus-visible {
   gap: 14px;
 }
 
+.chart-heading,
+.chart-legend {
+  display: flex;
+  align-items: center;
+}
+
+.chart-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.chart-heading h3 {
+  margin: 0;
+}
+
+.chart-legend {
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.chart-legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--good);
+  content: "";
+}
+
+.chart-legend .outcome-key::before {
+  background: var(--bad);
+}
+
 .chart-row {
   display: grid;
   grid-template-columns: minmax(75px, 0.8fr) minmax(100px, 2fr) auto;
@@ -649,6 +690,61 @@ button:focus-visible {
 .chart-bar .outcome-bar,
 .progress-track .over-budget {
   background: var(--bad);
+}
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.trend-row strong {
+  min-width: 74px;
+  text-align: right;
+}
+
+.trend-bars {
+  display: grid;
+  gap: 3px;
+}
+
+.trend-bars span {
+  display: block;
+  width: var(--value, 0%);
+  min-width: 2px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--good);
+}
+
+.trend-bars .outcome-bar {
+  background: var(--bad);
+}
+
+.insight-list {
+  display: grid;
+  gap: 0;
+}
+
+.insight-list p {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 11px 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.insight-list p:first-child {
+  padding-top: 2px;
+}
+
+.insight-list p:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .compact-field {
@@ -790,6 +886,88 @@ button:focus-visible {
 
 .backup-card {
   padding: 18px;
+}
+
+.snapshot-card {
+  margin-top: 18px;
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.snapshot-card .section-row p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.snapshot-card .finance-list {
+  background: var(--bg);
+}
+
+.amount-dialog {
+  width: min(440px, calc(100vw - 28px));
+  border: 0;
+  border-radius: var(--radius-lg);
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+}
+
+.amount-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.amount-dialog form {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.dialog-heading,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-heading h2 {
+  margin: 0;
+}
+
+.dialog-close {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--text);
+  font-size: 1.5rem;
+}
+
+.dialog-description {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+}
+
+.dialog-actions .button {
+  min-width: 112px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
 }
 
 .backup-card p {
@@ -934,9 +1112,24 @@ button:focus-visible {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .asset-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .analytics-grid,
   .planning-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 

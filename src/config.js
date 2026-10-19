@@ -1,5 +1,7 @@
-export const APP_VERSION = "6.0.0";
+export const APP_VERSION = "7.0.0";
 export const STORAGE_KEY = "minimalFinanceControlState";
+export const HISTORY_KEY = "okaneLocalSnapshots";
+export const LAST_EXPORT_KEY = "okaneLastExportAt";
 export const THEME_KEY = "okaneThemePreference";
 export const CURRENCY = "JPY";
 

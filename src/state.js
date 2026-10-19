@@ -1,4 +1,4 @@
-import { APP_VERSION, STORAGE_KEY } from "./config.js";
+import { APP_VERSION, HISTORY_KEY, STORAGE_KEY } from "./config.js";
 import { createId, isValidDate, todayString } from "./utils.js";
 
 export function createDefaultState() {
@@ -12,7 +12,7 @@ export function createDefaultState() {
   return {
     version: APP_VERSION,
     categories,
-    asset: { initialBalance: 0, updatedAt: createdAt },
+    asset: { initialBalance: 0, updatedAt: createdAt, history: [] },
     debts: [],
     transactions: [],
     transportRules: [],
@@ -44,7 +44,14 @@ export function sanitizeState(input) {
     initialBalance: input?.asset && Number.isFinite(Number(input.asset.initialBalance))
       ? Number(input.asset.initialBalance)
       : sourceAccounts.filter((item) => !legacyDebtAccounts.includes(item)).reduce((sum, item) => sum + (Number(item.initialBalance) || 0), 0),
-    updatedAt: input?.asset?.updatedAt || new Date().toISOString()
+    updatedAt: input?.asset?.updatedAt || new Date().toISOString(),
+    history: sanitizeList(input?.asset?.history, (item) => ({
+      id: String(item.id),
+      previousBalance: finiteNumber(item.previousBalance),
+      newBalance: finiteNumber(item.newBalance),
+      note: item.note ? String(item.note).slice(0, 120) : "Opening balance updated",
+      createdAt: item.createdAt || new Date().toISOString()
+    })).slice(0, 50)
   };
 
   const debts = Array.isArray(input?.debts)
@@ -138,6 +145,11 @@ function positiveNumber(value) {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function sanitizeTransaction(item) {
   const base = {
     id: String(item.id),
@@ -186,8 +198,54 @@ export class StateStore {
     }
   }
 
-  save(state) {
-    this.storage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: APP_VERSION }));
+  save(state, { snapshot = false } = {}) {
+    const next = JSON.stringify({ ...state, version: APP_VERSION });
+    if (snapshot) this.snapshotCurrent(next);
+    try {
+      this.storage.setItem(STORAGE_KEY, next);
+    } catch (error) {
+      // Recovery copies should never prevent the primary finance data from saving.
+      this.clearSnapshots();
+      this.storage.setItem(STORAGE_KEY, next);
+      console.warn("Local snapshots were cleared to make room for current data", error);
+    }
+  }
+
+  getSnapshots() {
+    try {
+      const snapshots = JSON.parse(this.storage.getItem(HISTORY_KEY) || "[]");
+      return Array.isArray(snapshots) ? snapshots : [];
+    } catch {
+      return [];
+    }
+  }
+
+  restoreSnapshot(id) {
+    const snapshot = this.getSnapshots().find((item) => item.id === id);
+    if (!snapshot?.state) throw new Error("Local snapshot was not found.");
+    return sanitizeState(snapshot.state);
+  }
+
+  clearSnapshots() {
+    this.storage.removeItem?.(HISTORY_KEY);
+  }
+
+  snapshotCurrent(next) {
+    try {
+      const current = this.storage.getItem(STORAGE_KEY);
+      if (!current || current === next) return;
+      const snapshots = this.getSnapshots();
+      snapshots.unshift({
+        id: createId(),
+        createdAt: new Date().toISOString(),
+        state: JSON.parse(current)
+      });
+      let trimmed = snapshots.slice(0, 8);
+      while (trimmed.length > 1 && JSON.stringify(trimmed).length > 1_000_000) trimmed.pop();
+      this.storage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+    } catch (error) {
+      console.warn("Unable to create local snapshot", error);
+    }
   }
 }
 
