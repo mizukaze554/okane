@@ -53,14 +53,21 @@ test("roasts unusually expensive JPY purchases after saving", () => {
     "YOUR WALLET JUST FILED A MISSING PERSON REPORT. 😭");
 });
 
-test("does not roast income, non-JPY spending, health, or debt payments", () => {
-  const sensitiveState = {
-    categories: [{ id: "health", name: "Health" }, { id: "debt", name: "Debt Payment" }]
-  };
+test("uses stable category-specific roasts for every default expense category", () => {
+  const categories = ["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Debt Payment", "Other Expense"]
+    .map((name) => ({ id: name.toLowerCase(), name }));
+  const roastState = { categories };
+  setCurrency("JPY");
+  for (const category of categories) {
+    const transaction = { id: `tx-${category.id}`, type: "outcome", amount: 100_000, categoryId: category.id };
+    assert.equal(typeof roastTransaction(transaction, roastState), "string");
+    assert.equal(roastTransaction(transaction, roastState), roastTransaction(transaction, roastState));
+  }
+});
+
+test("does not roast income or non-JPY spending", () => {
   setCurrency("JPY");
   assert.equal(roastTransaction({ type: "income", amount: 30_000, categoryId: "food" }, state), null);
-  assert.equal(roastTransaction({ type: "outcome", amount: 100_000, categoryId: "health" }, sensitiveState), null);
-  assert.equal(roastTransaction({ type: "outcome", amount: 100_000, categoryId: "debt" }, sensitiveState), null);
   setCurrency("USD");
   assert.equal(roastTransaction({ type: "outcome", amount: 30_000, categoryId: "food" }, state), null);
   setCurrency("JPY");
